@@ -1,11 +1,62 @@
 // 自动生成，勿手改：tools/gen_csclib.js
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Joy
 {
+    // C: typedef struct { ... } jcolor_t;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct jcolor_t
+    {
+        public byte r;
+        public byte g;
+        public byte b;
+        public byte a;
+    }
+
+    // C: typedef struct { ... } jrect_t;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct jrect_t
+    {
+        public float x;
+        public float y;
+        public float w;
+        public float h;
+    }
+
+    // C: typedef struct { ... } rectangle_t;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct rectangle_t
+    {
+        public float x;
+        public float y;
+        public float width;
+        public float height;
+    }
+
+    // C: typedef struct { ... } vec2_t;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct vec2_t
+    {
+        public float x;
+        public float y;
+    }
+
+    // C: typedef struct { ... } vec3_t;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct vec3_t
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
     internal static class Animation
     {
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void animation_add_clip(IntPtr animation, string image_path, float duration, jrect_t src_rect);
+
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern IntPtr animation_create(IntPtr r2d);
 
@@ -120,16 +171,25 @@ namespace Joy
         public static extern void button_process_event(IntPtr btn, IntPtr @event);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void button_set_hover_color(IntPtr btn, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_hovered(IntPtr btn, bool v);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_image(IntPtr btn, IntPtr image);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void button_set_normal_color(IntPtr btn, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_position(IntPtr btn, float x, float y);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_pressed(IntPtr btn, bool v);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void button_set_pressed_color(IntPtr btn, jcolor_t color);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_pressed_image(IntPtr btn, IntPtr image);
@@ -139,6 +199,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void button_set_text_offset(IntPtr btn, float x, float y);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void button_set_textx(IntPtr btn, IntPtr fontinfo, string str, int len, jcolor_t color);
 
     }
 
@@ -160,6 +223,9 @@ namespace Joy
         public static extern void checkbox_process_event(IntPtr cb, IntPtr @event);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void checkbox_set_colors(IntPtr checkbox, jcolor_t box, jcolor_t check, jcolor_t hover);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void checkbox_set_hovered(IntPtr cb, bool v);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -169,12 +235,31 @@ namespace Joy
         public static extern void checkbox_set_r2d(IntPtr checkbox, IntPtr r2d);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void checkbox_set_text_color(IntPtr checkbox, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void checkbox_toggle(IntPtr checkbox);
+
+    }
+
+    internal static class Collision2d
+    {
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool collision2d_check_point_rectangle(vec2_t point, rectangle_t rect);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool collision2d_check_point_triangle(vec2_t point, vec2_t p1, vec2_t p2, vec2_t p3);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool collision2d_check_rectangles(rectangle_t a, rectangle_t b);
 
     }
 
     internal static class Combobox
     {
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void combobox_add_item(IntPtr combobox, IntPtr font, string str, int len, jcolor_t color);
+
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern IntPtr combobox_create(IntPtr r2d, float fx, float fy, float fw, float fh);
 
@@ -370,6 +455,13 @@ namespace Joy
 
     }
 
+    internal static class Gjk3d
+    {
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool gjk3d_collide(IntPtr c1, IntPtr c2, vec3_t init_dir, IntPtr contact);
+
+    }
+
     internal static class Image
     {
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -383,6 +475,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void image_destroy(IntPtr image);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void image_draw(IntPtr image, vec2_t position);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void image_set_blend_mode(IntPtr image, int mode);
@@ -549,6 +644,12 @@ namespace Joy
         public static extern void janimator_set_trigger(IntPtr anim, string name);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void janimator_state_add_clip(IntPtr anim, string state_name, string image_path, float duration, jrect_t src_rect);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void janimator_state_add_motion(IntPtr anim, string state_name, string image_path, float duration, jrect_t src_rect, float threshold);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void janimator_state_set_blend(IntPtr anim, string state_name, string param_name);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -713,6 +814,15 @@ namespace Joy
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jtext_print(IntPtr r2d, IntPtr jtext_tex, float x, float y);
 
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jtext_printf(IntPtr r2d, IntPtr font, string str, int len, jcolor_t color, float fx, float fy);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jtext_printf_scaled(IntPtr r2d, IntPtr font, string str, int len, jcolor_t color, float fx, float fy, float scale);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jtext_printx(IntPtr r2d, IntPtr font, string str, int len, jcolor_t color, float x, float y);
+
     }
 
     internal static class Jtilemap
@@ -792,6 +902,9 @@ namespace Joy
         public static extern void jui_begin(IntPtr ctx);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool jui_button(IntPtr ctx, int id, jrect_t r, string text);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern IntPtr jui_ctx_create(IntPtr r2d, IntPtr font);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -799,6 +912,12 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_end(IntPtr ctx);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_fill_rect(IntPtr ctx, jrect_t r, jcolor_t c);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool jui_hit(IntPtr ctx, jrect_t rect);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_input_down(IntPtr ctx, int button);
@@ -831,13 +950,28 @@ namespace Joy
         public static extern bool jui_is_shift(IntPtr ctx);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_line(IntPtr ctx, float x1, float y1, float x2, float y2, jcolor_t c);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_panel_begin(IntPtr ctx, jrect_t r, string title);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_panel_end(IntPtr ctx);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_panel_frame(IntPtr ctx, jrect_t r);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_pop_clip(IntPtr ctx);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_push_clip(IntPtr ctx, jrect_t rect);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_reset_clip(IntPtr ctx);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern float jui_scroll_begin(IntPtr ctx, int id, jrect_t view, float content_h);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void jui_scroll_end(IntPtr ctx);
@@ -846,7 +980,19 @@ namespace Joy
         public static extern void jui_scroll_set_offset(IntPtr ctx, int id, float off, float content_h, float view_h);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_scrollbar(IntPtr ctx, jrect_t view, float content_h, float off);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void jui_stroke_rect(IntPtr ctx, jrect_t r, jcolor_t c);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern float jui_take_wheel(IntPtr ctx);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern int jui_text(IntPtr ctx, float x, float y, string s, jcolor_t c);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern int jui_text_centered(IntPtr ctx, jrect_t r, string s, jcolor_t c);
 
     }
 
@@ -1071,10 +1217,16 @@ namespace Joy
         public static extern void r2d_pop_clip_rect(IntPtr r2d);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool r2d_push_clip_rect(IntPtr r2d, jrect_t rect);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r2d_reset_clip_stack(IntPtr r2d);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool r2d_set_blend_mode(IntPtr r2d, int mode);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool r2d_set_clip_rect(IntPtr r2d, jrect_t rect);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r2d_set_colorf(IntPtr r2d, float r, float g, float b, float a);
@@ -1126,6 +1278,12 @@ namespace Joy
         public static extern void r3d_button_release(IntPtr r, IntPtr btn, float mx, float my);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_camera_fps(IntPtr r, vec3_t pos, float yaw, float pitch, float fovy);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_camera_lookat(IntPtr r, vec3_t eye, vec3_t target, vec3_t up, float fovy);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern IntPtr r3d_checkbox_create(float x, float y, float size, string label);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -1139,6 +1297,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool r3d_checkbox_is_pressed(IntPtr r, IntPtr cb, float x, float y);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_checkbox_set_colors(IntPtr cb, jcolor_t box, jcolor_t check, jcolor_t hover);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r3d_checkbox_set_hovered(IntPtr cb, bool v);
@@ -1195,7 +1356,22 @@ namespace Joy
         public static extern void r3d_draw_grid(IntPtr r, int slices, float spacing, float line_width);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_draw_mesh(IntPtr r, IntPtr m, vec3_t pos, vec3_t scale, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_draw_mesh_solid(IntPtr r, IntPtr m, vec3_t pos, vec3_t scale, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_draw_mesh_tex(IntPtr r, IntPtr m, vec3_t pos, vec3_t scale, IntPtr tex);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_draw_mesh_tex_basis(IntPtr r, IntPtr m, vec3_t center, vec3_t right, vec3_t up, float size, IntPtr tex);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r3d_draw_tex_2d(IntPtr r, IntPtr m, float x, float y, float w, float h, IntPtr tex, float winW, float winH);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_draw_wire(IntPtr r, IntPtr m, vec3_t pos, vec3_t scale, jcolor_t color);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r3d_end(IntPtr r);
@@ -1214,6 +1390,15 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool r3d_font_draw_2d(IntPtr r, IntPtr m, string text, float pixelX, float pixelY, float fontSize, float winW, float winH);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool r3d_font_draw_3d(IntPtr r, IntPtr m, string text, vec3_t topLeft, float yaw, float pitch, float size);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool r3d_font_draw_billboard(IntPtr r, IntPtr m, string text, vec3_t topLeft, vec3_t right, vec3_t up, float size);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool r3d_font_draw_fixed(IntPtr r, IntPtr m, string text, vec3_t topLeft, float size);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool r3d_font_init(IntPtr r, string ttf_path, int pixel_height);
@@ -1367,6 +1552,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool r3d_slider_is_pressed(IntPtr r, IntPtr s, float x, float y);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void r3d_slider_set_colors(IntPtr s, jcolor_t track, jcolor_t fill, jcolor_t thumb, jcolor_t thumb_hover);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void r3d_slider_set_hovered(IntPtr s, bool v);
@@ -1602,10 +1790,22 @@ namespace Joy
     internal static class Shape
     {
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool shape_draw_circle(IntPtr r2d, string mode, vec2_t center, float radius, int segments);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool shape_draw_grid(IntPtr r2d, vec2_t start, vec2_t end, float grid_size);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool shape_draw_gridx(IntPtr r2d, vec2_t position, int rows, int cols, float grid_size);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool shape_draw_line(IntPtr r2d, float x1, float y1, float x2, float y2);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool shape_draw_line_f(IntPtr r2d, float fx1, float fy1, float fx2, float fy2);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool shape_draw_rectangle(IntPtr r2d, string mode, jrect_t rect);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool shape_draw_rectangle_f(IntPtr r2d, string mode, float fx, float fy, float fw, float fh);
@@ -1660,6 +1860,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void slider_process_event(IntPtr s, IntPtr @event);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void slider_set_colors(IntPtr s, jcolor_t track, jcolor_t fill, jcolor_t thumb, jcolor_t thumb_hover);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void slider_set_hovered(IntPtr s, bool v);
@@ -1789,6 +1992,9 @@ namespace Joy
     internal static class Text
     {
         [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern IntPtr text_createx(IntPtr r2d, IntPtr font, string str, int len, jcolor_t color);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern void text_destroy(IntPtr jtext_tex);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
@@ -1796,6 +2002,9 @@ namespace Joy
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern int text_get_width(IntPtr jtext_tex);
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void text_updatex(IntPtr text, IntPtr font, string str, int len, jcolor_t color);
 
     }
 

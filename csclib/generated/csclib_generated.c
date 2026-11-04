@@ -509,9 +509,21 @@ static bool w_r2d_draw_point(intptr_t r2d, float x, float y)
         return _ret;
 }
 
+static bool w_r2d_set_clip_rect(intptr_t r2d, jrect_t rect)
+{
+        bool _ret = r2d_set_clip_rect((jr2d_p)r2d, rect);
+        return _ret;
+}
+
 static void w_r2d_clear_clip(intptr_t r2d)
 {
         r2d_clear_clip((jr2d_p)r2d);
+}
+
+static bool w_r2d_push_clip_rect(intptr_t r2d, jrect_t rect)
+{
+        bool _ret = r2d_push_clip_rect((jr2d_p)r2d, rect);
+        return _ret;
 }
 
 static void w_r2d_pop_clip_rect(intptr_t r2d)
@@ -533,6 +545,34 @@ static bool w_r2d_point_in_clip(intptr_t r2d, float x, float y)
 static bool w_shape_draw_line(intptr_t r2d, float x1, float y1, float x2, float y2)
 {
         bool _ret = shape_draw_line((jr2d_p)r2d, x1, y1, x2, y2);
+        return _ret;
+}
+
+static bool w_shape_draw_rectangle(intptr_t r2d, MonoString* mode, jrect_t rect)
+{
+        char* s_mode = mono_string_to_utf8(mode);
+        bool _ret = shape_draw_rectangle((jr2d_p)r2d, s_mode, rect);
+        mono_free(s_mode);
+        return _ret;
+}
+
+static bool w_shape_draw_circle(intptr_t r2d, MonoString* mode, vec2_t center, float radius, int segments)
+{
+        char* s_mode = mono_string_to_utf8(mode);
+        bool _ret = shape_draw_circle((jr2d_p)r2d, s_mode, center, radius, segments);
+        mono_free(s_mode);
+        return _ret;
+}
+
+static bool w_shape_draw_grid(intptr_t r2d, vec2_t start, vec2_t end, float grid_size)
+{
+        bool _ret = shape_draw_grid((jr2d_p)r2d, start, end, grid_size);
+        return _ret;
+}
+
+static bool w_shape_draw_gridx(intptr_t r2d, vec2_t position, int rows, int cols, float grid_size)
+{
+        bool _ret = shape_draw_gridx((jr2d_p)r2d, position, rows, cols, grid_size);
         return _ret;
 }
 
@@ -561,6 +601,11 @@ static void w_image_destroy(intptr_t image)
         image_destroy((image_p)image);
 }
 
+static void w_image_draw(intptr_t image, vec2_t position)
+{
+        image_draw((image_p)image, position);
+}
+
 static void w_image_set_blend_mode(intptr_t image, int mode)
 {
         image_set_blend_mode((image_p)image, mode);
@@ -571,6 +616,21 @@ static void w_image_set_scale_mode(intptr_t image, int nearest)
         image_set_scale_mode((image_p)image, nearest);
 }
 
+static intptr_t w_text_createx(intptr_t r2d, intptr_t font, MonoString* str, int len, jcolor_t color)
+{
+        char* s_str = mono_string_to_utf8(str);
+        intptr_t _ret = (intptr_t)text_createx((jr2d_p)r2d, (font_p)font, s_str, len, color);
+        mono_free(s_str);
+        return _ret;
+}
+
+static void w_text_updatex(intptr_t text, intptr_t font, MonoString* str, int len, jcolor_t color)
+{
+        char* s_str = mono_string_to_utf8(str);
+        text_updatex((jtext_p)text, (font_p)font, s_str, len, color);
+        mono_free(s_str);
+}
+
 static void w_text_destroy(intptr_t jtext_tex)
 {
         text_destroy((jtext_p)jtext_tex);
@@ -579,6 +639,13 @@ static void w_text_destroy(intptr_t jtext_tex)
 static void w_jtext_print(intptr_t r2d, intptr_t jtext_tex, float x, float y)
 {
         jtext_print((jr2d_p)r2d, (jtext_p)jtext_tex, x, y);
+}
+
+static void w_jtext_printx(intptr_t r2d, intptr_t font, MonoString* str, int len, jcolor_t color, float x, float y)
+{
+        char* s_str = mono_string_to_utf8(str);
+        jtext_printx((jr2d_p)r2d, (font_p)font, s_str, len, color, x, y);
+        mono_free(s_str);
 }
 
 static bool w_r2d_draw_point_f(intptr_t r2d, float fx, float fy)
@@ -599,6 +666,20 @@ static bool w_shape_draw_line_f(intptr_t r2d, float fx1, float fy1, float fx2, f
 {
         bool _ret = shape_draw_line_f((jr2d_p)r2d, fx1, fy1, fx2, fy2);
         return _ret;
+}
+
+static void w_jtext_printf(intptr_t r2d, intptr_t font, MonoString* str, int len, jcolor_t color, float fx, float fy)
+{
+        char* s_str = mono_string_to_utf8(str);
+        jtext_printf((jr2d_p)r2d, (font_p)font, s_str, len, color, fx, fy);
+        mono_free(s_str);
+}
+
+static void w_jtext_printf_scaled(intptr_t r2d, intptr_t font, MonoString* str, int len, jcolor_t color, float fx, float fy, float scale)
+{
+        char* s_str = mono_string_to_utf8(str);
+        jtext_printf_scaled((jr2d_p)r2d, (font_p)font, s_str, len, color, fx, fy, scale);
+        mono_free(s_str);
 }
 
 static int w_text_get_width(intptr_t jtext_tex)
@@ -648,6 +729,13 @@ static void w_animation_destroy(intptr_t animation)
 static void w_animation_reset(intptr_t animation)
 {
         animation_reset((animation_p)animation);
+}
+
+static void w_animation_add_clip(intptr_t animation, MonoString* image_path, float duration, jrect_t src_rect)
+{
+        char* s_image_path = mono_string_to_utf8(image_path);
+        animation_add_clip((animation_p)animation, s_image_path, duration, src_rect);
+        mono_free(s_image_path);
 }
 
 static bool w_animation_is_finished(intptr_t animation)
@@ -744,6 +832,16 @@ static int w_r3d_get_draw_calls(intptr_t r)
         return _ret;
 }
 
+static void w_r3d_camera_lookat(intptr_t r, vec3_t eye, vec3_t target, vec3_t up, float fovy)
+{
+        r3d_camera_lookat((jr3d_p)r, eye, target, up, fovy);
+}
+
+static void w_r3d_camera_fps(intptr_t r, vec3_t pos, float yaw, float pitch, float fovy)
+{
+        r3d_camera_fps((jr3d_p)r, pos, yaw, pitch, fovy);
+}
+
 static intptr_t w_r3d_mesh_cube(intptr_t r, float w, float h, float d)
 {
         intptr_t _ret = (intptr_t)r3d_mesh_cube((jr3d_p)r, w, h, d);
@@ -826,6 +924,30 @@ static bool w_r3d_font_init(intptr_t r, MonoString* ttf_path, int pixel_height)
         char* s_ttf_path = mono_string_to_utf8(ttf_path);
         bool _ret = r3d_font_init((jr3d_p)r, s_ttf_path, pixel_height);
         mono_free(s_ttf_path);
+        return _ret;
+}
+
+static bool w_r3d_font_draw_3d(intptr_t r, intptr_t m, MonoString* text, vec3_t topLeft, float yaw, float pitch, float size)
+{
+        char* s_text = mono_string_to_utf8(text);
+        bool _ret = r3d_font_draw_3d((jr3d_p)r, (render_mesh_p)m, s_text, topLeft, yaw, pitch, size);
+        mono_free(s_text);
+        return _ret;
+}
+
+static bool w_r3d_font_draw_fixed(intptr_t r, intptr_t m, MonoString* text, vec3_t topLeft, float size)
+{
+        char* s_text = mono_string_to_utf8(text);
+        bool _ret = r3d_font_draw_fixed((jr3d_p)r, (render_mesh_p)m, s_text, topLeft, size);
+        mono_free(s_text);
+        return _ret;
+}
+
+static bool w_r3d_font_draw_billboard(intptr_t r, intptr_t m, MonoString* text, vec3_t topLeft, vec3_t right, vec3_t up, float size)
+{
+        char* s_text = mono_string_to_utf8(text);
+        bool _ret = r3d_font_draw_billboard((jr3d_p)r, (render_mesh_p)m, s_text, topLeft, right, up, size);
+        mono_free(s_text);
         return _ret;
 }
 
@@ -1088,6 +1210,11 @@ static float w_r3d_slider_get_value(intptr_t s)
         return _ret;
 }
 
+static void w_r3d_slider_set_colors(intptr_t s, jcolor_t track, jcolor_t fill, jcolor_t thumb, jcolor_t thumb_hover)
+{
+        r3d_slider_set_colors((jr3d_slider_p)s, track, fill, thumb, thumb_hover);
+}
+
 static void w_r3d_slider_draw(intptr_t r, intptr_t m, intptr_t s, float winW, float winH)
 {
         r3d_slider_draw((jr3d_p)r, (render_mesh_p)m, (jr3d_slider_p)s, winW, winH);
@@ -1155,14 +1282,44 @@ static bool w_r3d_checkbox_is_hovered(intptr_t r, intptr_t cb, float x, float y)
         return _ret;
 }
 
+static void w_r3d_checkbox_set_colors(intptr_t cb, jcolor_t box, jcolor_t check, jcolor_t hover)
+{
+        r3d_checkbox_set_colors((jr3d_checkbox_p)cb, box, check, hover);
+}
+
 static void w_r3d_checkbox_draw(intptr_t r, intptr_t m, intptr_t cb, float winW, float winH)
 {
         r3d_checkbox_draw((jr3d_p)r, (render_mesh_p)m, (jr3d_checkbox_p)cb, winW, winH);
 }
 
+static void w_r3d_draw_mesh(intptr_t r, intptr_t m, vec3_t pos, vec3_t scale, jcolor_t color)
+{
+        r3d_draw_mesh((jr3d_p)r, (render_mesh_p)m, pos, scale, color);
+}
+
+static void w_r3d_draw_mesh_tex(intptr_t r, intptr_t m, vec3_t pos, vec3_t scale, intptr_t tex)
+{
+        r3d_draw_mesh_tex((jr3d_p)r, (render_mesh_p)m, pos, scale, (void*)tex);
+}
+
+static void w_r3d_draw_mesh_tex_basis(intptr_t r, intptr_t m, vec3_t center, vec3_t right, vec3_t up, float size, intptr_t tex)
+{
+        r3d_draw_mesh_tex_basis((jr3d_p)r, (render_mesh_p)m, center, right, up, size, (void*)tex);
+}
+
 static void w_r3d_draw_grid(intptr_t r, int slices, float spacing, float line_width)
 {
         r3d_draw_grid((jr3d_p)r, slices, spacing, line_width);
+}
+
+static void w_r3d_draw_mesh_solid(intptr_t r, intptr_t m, vec3_t pos, vec3_t scale, jcolor_t color)
+{
+        r3d_draw_mesh_solid((jr3d_p)r, (render_mesh_p)m, pos, scale, color);
+}
+
+static void w_r3d_draw_wire(intptr_t r, intptr_t m, vec3_t pos, vec3_t scale, jcolor_t color)
+{
+        r3d_draw_wire((jr3d_p)r, (render_mesh_p)m, pos, scale, color);
 }
 
 static intptr_t w_r3d_create_line_pipeline(intptr_t device, intptr_t vertex_shader, intptr_t fragment_shader, int swapchain_format, int depth_format)
@@ -1204,6 +1361,30 @@ static intptr_t w_r3d_mesh_ramp_lit(intptr_t r, float w, float l, float h)
 static intptr_t w_r3d_mesh_custom_lit(intptr_t r, intptr_t verts, int vertex_count)
 {
         intptr_t _ret = (intptr_t)r3d_mesh_custom_lit((jr3d_p)r, (void*)verts, vertex_count);
+        return _ret;
+}
+
+static bool w_collision2d_check_point_rectangle(vec2_t point, rectangle_t rect)
+{
+        bool _ret = collision2d_check_point_rectangle(point, rect);
+        return _ret;
+}
+
+static bool w_collision2d_check_point_triangle(vec2_t point, vec2_t p1, vec2_t p2, vec2_t p3)
+{
+        bool _ret = collision2d_check_point_triangle(point, p1, p2, p3);
+        return _ret;
+}
+
+static bool w_collision2d_check_rectangles(rectangle_t a, rectangle_t b)
+{
+        bool _ret = collision2d_check_rectangles(a, b);
+        return _ret;
+}
+
+static bool w_gjk3d_collide(intptr_t c1, intptr_t c2, vec3_t init_dir, intptr_t contact)
+{
+        bool _ret = gjk3d_collide((gjk3d_collider_p)c1, (gjk3d_collider_p)c2, init_dir, (gjk3d_contact_p)contact);
         return _ret;
 }
 
@@ -1284,6 +1465,15 @@ static void w_janimator_set_default_state(intptr_t anim, MonoString* name)
         mono_free(s_name);
 }
 
+static void w_janimator_state_add_clip(intptr_t anim, MonoString* state_name, MonoString* image_path, float duration, jrect_t src_rect)
+{
+        char* s_state_name = mono_string_to_utf8(state_name);
+        char* s_image_path = mono_string_to_utf8(image_path);
+        janimator_state_add_clip((janimator_p)anim, s_state_name, s_image_path, duration, src_rect);
+        mono_free(s_state_name);
+        mono_free(s_image_path);
+}
+
 static void w_janimator_state_set_loop(intptr_t anim, MonoString* state_name, bool loop)
 {
         char* s_state_name = mono_string_to_utf8(state_name);
@@ -1305,6 +1495,15 @@ static void w_janimator_state_set_blend(intptr_t anim, MonoString* state_name, M
         janimator_state_set_blend((janimator_p)anim, s_state_name, s_param_name);
         mono_free(s_state_name);
         mono_free(s_param_name);
+}
+
+static void w_janimator_state_add_motion(intptr_t anim, MonoString* state_name, MonoString* image_path, float duration, jrect_t src_rect, float threshold)
+{
+        char* s_state_name = mono_string_to_utf8(state_name);
+        char* s_image_path = mono_string_to_utf8(image_path);
+        janimator_state_add_motion((janimator_p)anim, s_state_name, s_image_path, duration, src_rect, threshold);
+        mono_free(s_state_name);
+        mono_free(s_image_path);
 }
 
 static int w_janimator_add_transition(intptr_t anim, MonoString* from, MonoString* to)
@@ -1388,6 +1587,21 @@ static void w_button_set_size(intptr_t btn, float width, float height)
         button_set_size((button_p)btn, width, height);
 }
 
+static void w_button_set_normal_color(intptr_t btn, jcolor_t color)
+{
+        button_set_normal_color((button_p)btn, color);
+}
+
+static void w_button_set_hover_color(intptr_t btn, jcolor_t color)
+{
+        button_set_hover_color((button_p)btn, color);
+}
+
+static void w_button_set_pressed_color(intptr_t btn, jcolor_t color)
+{
+        button_set_pressed_color((button_p)btn, color);
+}
+
 static void w_button_set_image(intptr_t btn, intptr_t image)
 {
         button_set_image((button_p)btn, (image_p)image);
@@ -1396,6 +1610,13 @@ static void w_button_set_image(intptr_t btn, intptr_t image)
 static void w_button_set_pressed_image(intptr_t btn, intptr_t image)
 {
         button_set_pressed_image((button_p)btn, (image_p)image);
+}
+
+static void w_button_set_textx(intptr_t btn, intptr_t fontinfo, MonoString* str, int len, jcolor_t color)
+{
+        char* s_str = mono_string_to_utf8(str);
+        button_set_textx((button_p)btn, (font_p)fontinfo, s_str, len, color);
+        mono_free(s_str);
 }
 
 static bool w_button_is_hovered(intptr_t btn, float x, float y)
@@ -1526,6 +1747,13 @@ static intptr_t w_combobox_create(intptr_t r2d, float fx, float fy, float fw, fl
 static void w_combobox_destroy(intptr_t combobox)
 {
         combobox_destroy((combobox_p)combobox);
+}
+
+static void w_combobox_add_item(intptr_t combobox, intptr_t font, MonoString* str, int len, jcolor_t color)
+{
+        char* s_str = mono_string_to_utf8(str);
+        combobox_add_item((combobox_p)combobox, (font_p)font, s_str, len, color);
+        mono_free(s_str);
 }
 
 static bool w_combobox_is_pressed(intptr_t combobox, float x, float y)
@@ -1739,6 +1967,11 @@ static void w_checkbox_destroy(intptr_t checkbox)
         checkbox_destroy((checkbox_p)checkbox);
 }
 
+static void w_checkbox_set_colors(intptr_t checkbox, jcolor_t box, jcolor_t check, jcolor_t hover)
+{
+        checkbox_set_colors((checkbox_p)checkbox, box, check, hover);
+}
+
 static void w_checkbox_set_r2d(intptr_t checkbox, intptr_t r2d)
 {
         checkbox_set_r2d((checkbox_p)checkbox, (jr2d_p)r2d);
@@ -1747,6 +1980,11 @@ static void w_checkbox_set_r2d(intptr_t checkbox, intptr_t r2d)
 static void w_checkbox_set_position(intptr_t checkbox, int x, int y)
 {
         checkbox_set_position((checkbox_p)checkbox, x, y);
+}
+
+static void w_checkbox_set_text_color(intptr_t checkbox, jcolor_t color)
+{
+        checkbox_set_text_color((checkbox_p)checkbox, color);
 }
 
 static void w_checkbox_toggle(intptr_t checkbox)
@@ -2012,6 +2250,11 @@ static float w_slider_get_value(intptr_t s)
         return _ret;
 }
 
+static void w_slider_set_colors(intptr_t s, jcolor_t track, jcolor_t fill, jcolor_t thumb, jcolor_t thumb_hover)
+{
+        slider_set_colors((slider_p)s, track, fill, thumb, thumb_hover);
+}
+
 static void w_slider_set_rect(intptr_t s, float x, float y, float w, float h)
 {
         slider_set_rect((slider_p)s, x, y, w, h);
@@ -2254,6 +2497,11 @@ static bool w_jui_is_ctrl(intptr_t ctx)
         return _ret;
 }
 
+static void w_jui_push_clip(intptr_t ctx, jrect_t rect)
+{
+        jui_push_clip((jui_ctx_p)ctx, rect);
+}
+
 static void w_jui_pop_clip(intptr_t ctx)
 {
         jui_pop_clip((jui_ctx_p)ctx);
@@ -2264,9 +2512,64 @@ static void w_jui_reset_clip(intptr_t ctx)
         jui_reset_clip((jui_ctx_p)ctx);
 }
 
+static bool w_jui_hit(intptr_t ctx, jrect_t rect)
+{
+        bool _ret = jui_hit((jui_ctx_p)ctx, rect);
+        return _ret;
+}
+
+static void w_jui_fill_rect(intptr_t ctx, jrect_t r, jcolor_t c)
+{
+        jui_fill_rect((jui_ctx_p)ctx, r, c);
+}
+
+static void w_jui_stroke_rect(intptr_t ctx, jrect_t r, jcolor_t c)
+{
+        jui_stroke_rect((jui_ctx_p)ctx, r, c);
+}
+
+static void w_jui_line(intptr_t ctx, float x1, float y1, float x2, float y2, jcolor_t c)
+{
+        jui_line((jui_ctx_p)ctx, x1, y1, x2, y2, c);
+}
+
+static int w_jui_text(intptr_t ctx, float x, float y, MonoString* s, jcolor_t c)
+{
+        char* s_s = mono_string_to_utf8(s);
+        int _ret = jui_text((jui_ctx_p)ctx, x, y, s_s, c);
+        mono_free(s_s);
+        return _ret;
+}
+
+static int w_jui_text_centered(intptr_t ctx, jrect_t r, MonoString* s, jcolor_t c)
+{
+        char* s_s = mono_string_to_utf8(s);
+        int _ret = jui_text_centered((jui_ctx_p)ctx, r, s_s, c);
+        mono_free(s_s);
+        return _ret;
+}
+
+static void w_jui_panel_begin(intptr_t ctx, jrect_t r, MonoString* title)
+{
+        char* s_title = mono_string_to_utf8(title);
+        jui_panel_begin((jui_ctx_p)ctx, r, s_title);
+        mono_free(s_title);
+}
+
 static void w_jui_panel_end(intptr_t ctx)
 {
         jui_panel_end((jui_ctx_p)ctx);
+}
+
+static void w_jui_panel_frame(intptr_t ctx, jrect_t r)
+{
+        jui_panel_frame((jui_ctx_p)ctx, r);
+}
+
+static float w_jui_scroll_begin(intptr_t ctx, int id, jrect_t view, float content_h)
+{
+        float _ret = jui_scroll_begin((jui_ctx_p)ctx, id, view, content_h);
+        return _ret;
 }
 
 static void w_jui_scroll_end(intptr_t ctx)
@@ -2274,9 +2577,22 @@ static void w_jui_scroll_end(intptr_t ctx)
         jui_scroll_end((jui_ctx_p)ctx);
 }
 
+static void w_jui_scrollbar(intptr_t ctx, jrect_t view, float content_h, float off)
+{
+        jui_scrollbar((jui_ctx_p)ctx, view, content_h, off);
+}
+
 static void w_jui_scroll_set_offset(intptr_t ctx, int id, float off, float content_h, float view_h)
 {
         jui_scroll_set_offset((jui_ctx_p)ctx, id, off, content_h, view_h);
+}
+
+static bool w_jui_button(intptr_t ctx, int id, jrect_t r, MonoString* text)
+{
+        char* s_text = mono_string_to_utf8(text);
+        bool _ret = jui_button((jui_ctx_p)ctx, id, r, s_text);
+        mono_free(s_text);
+        return _ret;
 }
 
 static intptr_t w_jtilemap_load_file_json(MonoString* filename)
@@ -3282,22 +3598,34 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R2d::r2d_set_colorf", (const void*)w_r2d_set_colorf);
         csx_register_internal_call("Joy.R2d::r2d_set_blend_mode", (const void*)w_r2d_set_blend_mode);
         csx_register_internal_call("Joy.R2d::r2d_draw_point", (const void*)w_r2d_draw_point);
+        csx_register_internal_call("Joy.R2d::r2d_set_clip_rect", (const void*)w_r2d_set_clip_rect);
         csx_register_internal_call("Joy.R2d::r2d_clear_clip", (const void*)w_r2d_clear_clip);
+        csx_register_internal_call("Joy.R2d::r2d_push_clip_rect", (const void*)w_r2d_push_clip_rect);
         csx_register_internal_call("Joy.R2d::r2d_pop_clip_rect", (const void*)w_r2d_pop_clip_rect);
         csx_register_internal_call("Joy.R2d::r2d_reset_clip_stack", (const void*)w_r2d_reset_clip_stack);
         csx_register_internal_call("Joy.R2d::r2d_point_in_clip", (const void*)w_r2d_point_in_clip);
         csx_register_internal_call("Joy.Shape::shape_draw_line", (const void*)w_shape_draw_line);
+        csx_register_internal_call("Joy.Shape::shape_draw_rectangle", (const void*)w_shape_draw_rectangle);
+        csx_register_internal_call("Joy.Shape::shape_draw_circle", (const void*)w_shape_draw_circle);
+        csx_register_internal_call("Joy.Shape::shape_draw_grid", (const void*)w_shape_draw_grid);
+        csx_register_internal_call("Joy.Shape::shape_draw_gridx", (const void*)w_shape_draw_gridx);
         csx_register_internal_call("Joy.Image::image_create", (const void*)w_image_create);
         csx_register_internal_call("Joy.Image::image_create_from_data", (const void*)w_image_create_from_data);
         csx_register_internal_call("Joy.Image::image_create_empty", (const void*)w_image_create_empty);
         csx_register_internal_call("Joy.Image::image_destroy", (const void*)w_image_destroy);
+        csx_register_internal_call("Joy.Image::image_draw", (const void*)w_image_draw);
         csx_register_internal_call("Joy.Image::image_set_blend_mode", (const void*)w_image_set_blend_mode);
         csx_register_internal_call("Joy.Image::image_set_scale_mode", (const void*)w_image_set_scale_mode);
+        csx_register_internal_call("Joy.Text::text_createx", (const void*)w_text_createx);
+        csx_register_internal_call("Joy.Text::text_updatex", (const void*)w_text_updatex);
         csx_register_internal_call("Joy.Text::text_destroy", (const void*)w_text_destroy);
         csx_register_internal_call("Joy.Jtext::jtext_print", (const void*)w_jtext_print);
+        csx_register_internal_call("Joy.Jtext::jtext_printx", (const void*)w_jtext_printx);
         csx_register_internal_call("Joy.R2d::r2d_draw_point_f", (const void*)w_r2d_draw_point_f);
         csx_register_internal_call("Joy.Shape::shape_draw_rectangle_f", (const void*)w_shape_draw_rectangle_f);
         csx_register_internal_call("Joy.Shape::shape_draw_line_f", (const void*)w_shape_draw_line_f);
+        csx_register_internal_call("Joy.Jtext::jtext_printf", (const void*)w_jtext_printf);
+        csx_register_internal_call("Joy.Jtext::jtext_printf_scaled", (const void*)w_jtext_printf_scaled);
         csx_register_internal_call("Joy.Text::text_get_width", (const void*)w_text_get_width);
         csx_register_internal_call("Joy.Text::text_get_height", (const void*)w_text_get_height);
         csx_register_internal_call("Joy.Jtext::jtext_cache_clear", (const void*)w_jtext_cache_clear);
@@ -3307,6 +3635,7 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Animation::animation_create", (const void*)w_animation_create);
         csx_register_internal_call("Joy.Animation::animation_destroy", (const void*)w_animation_destroy);
         csx_register_internal_call("Joy.Animation::animation_reset", (const void*)w_animation_reset);
+        csx_register_internal_call("Joy.Animation::animation_add_clip", (const void*)w_animation_add_clip);
         csx_register_internal_call("Joy.Animation::animation_is_finished", (const void*)w_animation_is_finished);
         csx_register_internal_call("Joy.Animation::animation_set_position", (const void*)w_animation_set_position);
         csx_register_internal_call("Joy.Animation::animation_set_scale", (const void*)w_animation_set_scale);
@@ -3323,6 +3652,8 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R3d::r3d_begin", (const void*)w_r3d_begin);
         csx_register_internal_call("Joy.R3d::r3d_end", (const void*)w_r3d_end);
         csx_register_internal_call("Joy.R3d::r3d_get_draw_calls", (const void*)w_r3d_get_draw_calls);
+        csx_register_internal_call("Joy.R3d::r3d_camera_lookat", (const void*)w_r3d_camera_lookat);
+        csx_register_internal_call("Joy.R3d::r3d_camera_fps", (const void*)w_r3d_camera_fps);
         csx_register_internal_call("Joy.R3d::r3d_mesh_cube", (const void*)w_r3d_mesh_cube);
         csx_register_internal_call("Joy.R3d::r3d_mesh_sphere", (const void*)w_r3d_mesh_sphere);
         csx_register_internal_call("Joy.R3d::r3d_mesh_plane", (const void*)w_r3d_mesh_plane);
@@ -3337,6 +3668,9 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R3d::r3d_create_texture", (const void*)w_r3d_create_texture);
         csx_register_internal_call("Joy.R3d::r3d_gen_checkerboard", (const void*)w_r3d_gen_checkerboard);
         csx_register_internal_call("Joy.R3d::r3d_font_init", (const void*)w_r3d_font_init);
+        csx_register_internal_call("Joy.R3d::r3d_font_draw_3d", (const void*)w_r3d_font_draw_3d);
+        csx_register_internal_call("Joy.R3d::r3d_font_draw_fixed", (const void*)w_r3d_font_draw_fixed);
+        csx_register_internal_call("Joy.R3d::r3d_font_draw_billboard", (const void*)w_r3d_font_draw_billboard);
         csx_register_internal_call("Joy.R3d::r3d_font_draw_2d", (const void*)w_r3d_font_draw_2d);
         csx_register_internal_call("Joy.R3d::r3d_font_cache_set_limit", (const void*)w_r3d_font_cache_set_limit);
         csx_register_internal_call("Joy.R3d::r3d_font_cache_get_count", (const void*)w_r3d_font_cache_get_count);
@@ -3384,6 +3718,7 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R3d::r3d_slider_destroy", (const void*)w_r3d_slider_destroy);
         csx_register_internal_call("Joy.R3d::r3d_slider_set_value", (const void*)w_r3d_slider_set_value);
         csx_register_internal_call("Joy.R3d::r3d_slider_get_value", (const void*)w_r3d_slider_get_value);
+        csx_register_internal_call("Joy.R3d::r3d_slider_set_colors", (const void*)w_r3d_slider_set_colors);
         csx_register_internal_call("Joy.R3d::r3d_slider_draw", (const void*)w_r3d_slider_draw);
         csx_register_internal_call("Joy.R3d::r3d_slider_is_pressed", (const void*)w_r3d_slider_is_pressed);
         csx_register_internal_call("Joy.R3d::r3d_slider_set_pressed", (const void*)w_r3d_slider_set_pressed);
@@ -3396,8 +3731,14 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R3d::r3d_checkbox_is_pressed", (const void*)w_r3d_checkbox_is_pressed);
         csx_register_internal_call("Joy.R3d::r3d_checkbox_set_hovered", (const void*)w_r3d_checkbox_set_hovered);
         csx_register_internal_call("Joy.R3d::r3d_checkbox_is_hovered", (const void*)w_r3d_checkbox_is_hovered);
+        csx_register_internal_call("Joy.R3d::r3d_checkbox_set_colors", (const void*)w_r3d_checkbox_set_colors);
         csx_register_internal_call("Joy.R3d::r3d_checkbox_draw", (const void*)w_r3d_checkbox_draw);
+        csx_register_internal_call("Joy.R3d::r3d_draw_mesh", (const void*)w_r3d_draw_mesh);
+        csx_register_internal_call("Joy.R3d::r3d_draw_mesh_tex", (const void*)w_r3d_draw_mesh_tex);
+        csx_register_internal_call("Joy.R3d::r3d_draw_mesh_tex_basis", (const void*)w_r3d_draw_mesh_tex_basis);
         csx_register_internal_call("Joy.R3d::r3d_draw_grid", (const void*)w_r3d_draw_grid);
+        csx_register_internal_call("Joy.R3d::r3d_draw_mesh_solid", (const void*)w_r3d_draw_mesh_solid);
+        csx_register_internal_call("Joy.R3d::r3d_draw_wire", (const void*)w_r3d_draw_wire);
         csx_register_internal_call("Joy.R3d::r3d_create_line_pipeline", (const void*)w_r3d_create_line_pipeline);
         csx_register_internal_call("Joy.R3d::r3d_create_lighting_pipeline", (const void*)w_r3d_create_lighting_pipeline);
         csx_register_internal_call("Joy.R3d::r3d_mesh_cube_lit", (const void*)w_r3d_mesh_cube_lit);
@@ -3405,6 +3746,10 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.R3d::r3d_mesh_plane_lit", (const void*)w_r3d_mesh_plane_lit);
         csx_register_internal_call("Joy.R3d::r3d_mesh_ramp_lit", (const void*)w_r3d_mesh_ramp_lit);
         csx_register_internal_call("Joy.R3d::r3d_mesh_custom_lit", (const void*)w_r3d_mesh_custom_lit);
+        csx_register_internal_call("Joy.Collision2d::collision2d_check_point_rectangle", (const void*)w_collision2d_check_point_rectangle);
+        csx_register_internal_call("Joy.Collision2d::collision2d_check_point_triangle", (const void*)w_collision2d_check_point_triangle);
+        csx_register_internal_call("Joy.Collision2d::collision2d_check_rectangles", (const void*)w_collision2d_check_rectangles);
+        csx_register_internal_call("Joy.Gjk3d::gjk3d_collide", (const void*)w_gjk3d_collide);
         csx_register_internal_call("Joy.Janimator::janimator_create", (const void*)w_janimator_create);
         csx_register_internal_call("Joy.Janimator::janimator_destroy", (const void*)w_janimator_destroy);
         csx_register_internal_call("Joy.Janimator::janimator_set_float", (const void*)w_janimator_set_float);
@@ -3416,9 +3761,11 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Janimator::janimator_get_bool", (const void*)w_janimator_get_bool);
         csx_register_internal_call("Joy.Janimator::janimator_add_state", (const void*)w_janimator_add_state);
         csx_register_internal_call("Joy.Janimator::janimator_set_default_state", (const void*)w_janimator_set_default_state);
+        csx_register_internal_call("Joy.Janimator::janimator_state_add_clip", (const void*)w_janimator_state_add_clip);
         csx_register_internal_call("Joy.Janimator::janimator_state_set_loop", (const void*)w_janimator_state_set_loop);
         csx_register_internal_call("Joy.Janimator::janimator_state_set_speed", (const void*)w_janimator_state_set_speed);
         csx_register_internal_call("Joy.Janimator::janimator_state_set_blend", (const void*)w_janimator_state_set_blend);
+        csx_register_internal_call("Joy.Janimator::janimator_state_add_motion", (const void*)w_janimator_state_add_motion);
         csx_register_internal_call("Joy.Janimator::janimator_add_transition", (const void*)w_janimator_add_transition);
         csx_register_internal_call("Joy.Janimator::janimator_add_any_transition", (const void*)w_janimator_add_any_transition);
         csx_register_internal_call("Joy.Janimator::janimator_transition_add_cond", (const void*)w_janimator_transition_add_cond);
@@ -3433,8 +3780,12 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Button::button_destroy", (const void*)w_button_destroy);
         csx_register_internal_call("Joy.Button::button_set_position", (const void*)w_button_set_position);
         csx_register_internal_call("Joy.Button::button_set_size", (const void*)w_button_set_size);
+        csx_register_internal_call("Joy.Button::button_set_normal_color", (const void*)w_button_set_normal_color);
+        csx_register_internal_call("Joy.Button::button_set_hover_color", (const void*)w_button_set_hover_color);
+        csx_register_internal_call("Joy.Button::button_set_pressed_color", (const void*)w_button_set_pressed_color);
         csx_register_internal_call("Joy.Button::button_set_image", (const void*)w_button_set_image);
         csx_register_internal_call("Joy.Button::button_set_pressed_image", (const void*)w_button_set_pressed_image);
+        csx_register_internal_call("Joy.Button::button_set_textx", (const void*)w_button_set_textx);
         csx_register_internal_call("Joy.Button::button_is_hovered", (const void*)w_button_is_hovered);
         csx_register_internal_call("Joy.Button::button_is_pressed", (const void*)w_button_is_pressed);
         csx_register_internal_call("Joy.Button::button_set_hovered", (const void*)w_button_set_hovered);
@@ -3459,6 +3810,7 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Scrollview::scrollview_process_event", (const void*)w_scrollview_process_event);
         csx_register_internal_call("Joy.Combobox::combobox_create", (const void*)w_combobox_create);
         csx_register_internal_call("Joy.Combobox::combobox_destroy", (const void*)w_combobox_destroy);
+        csx_register_internal_call("Joy.Combobox::combobox_add_item", (const void*)w_combobox_add_item);
         csx_register_internal_call("Joy.Combobox::combobox_is_pressed", (const void*)w_combobox_is_pressed);
         csx_register_internal_call("Joy.Combobox::combobox_is_open", (const void*)w_combobox_is_open);
         csx_register_internal_call("Joy.Combobox::combobox_set_open", (const void*)w_combobox_set_open);
@@ -3496,8 +3848,10 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Radio::radio_process_event", (const void*)w_radio_process_event);
         csx_register_internal_call("Joy.Checkbox::checkbox_create", (const void*)w_checkbox_create);
         csx_register_internal_call("Joy.Checkbox::checkbox_destroy", (const void*)w_checkbox_destroy);
+        csx_register_internal_call("Joy.Checkbox::checkbox_set_colors", (const void*)w_checkbox_set_colors);
         csx_register_internal_call("Joy.Checkbox::checkbox_set_r2d", (const void*)w_checkbox_set_r2d);
         csx_register_internal_call("Joy.Checkbox::checkbox_set_position", (const void*)w_checkbox_set_position);
+        csx_register_internal_call("Joy.Checkbox::checkbox_set_text_color", (const void*)w_checkbox_set_text_color);
         csx_register_internal_call("Joy.Checkbox::checkbox_toggle", (const void*)w_checkbox_toggle);
         csx_register_internal_call("Joy.Checkbox::checkbox_is_pressed", (const void*)w_checkbox_is_pressed);
         csx_register_internal_call("Joy.Checkbox::checkbox_set_hovered", (const void*)w_checkbox_set_hovered);
@@ -3547,6 +3901,7 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Slider::slider_destroy", (const void*)w_slider_destroy);
         csx_register_internal_call("Joy.Slider::slider_set_value", (const void*)w_slider_set_value);
         csx_register_internal_call("Joy.Slider::slider_get_value", (const void*)w_slider_get_value);
+        csx_register_internal_call("Joy.Slider::slider_set_colors", (const void*)w_slider_set_colors);
         csx_register_internal_call("Joy.Slider::slider_set_rect", (const void*)w_slider_set_rect);
         csx_register_internal_call("Joy.Slider::slider_set_range", (const void*)w_slider_set_range);
         csx_register_internal_call("Joy.Slider::slider_draw", (const void*)w_slider_draw);
@@ -3591,11 +3946,23 @@ void csopen_generated(void)
         csx_register_internal_call("Joy.Jui::jui_take_wheel", (const void*)w_jui_take_wheel);
         csx_register_internal_call("Joy.Jui::jui_is_shift", (const void*)w_jui_is_shift);
         csx_register_internal_call("Joy.Jui::jui_is_ctrl", (const void*)w_jui_is_ctrl);
+        csx_register_internal_call("Joy.Jui::jui_push_clip", (const void*)w_jui_push_clip);
         csx_register_internal_call("Joy.Jui::jui_pop_clip", (const void*)w_jui_pop_clip);
         csx_register_internal_call("Joy.Jui::jui_reset_clip", (const void*)w_jui_reset_clip);
+        csx_register_internal_call("Joy.Jui::jui_hit", (const void*)w_jui_hit);
+        csx_register_internal_call("Joy.Jui::jui_fill_rect", (const void*)w_jui_fill_rect);
+        csx_register_internal_call("Joy.Jui::jui_stroke_rect", (const void*)w_jui_stroke_rect);
+        csx_register_internal_call("Joy.Jui::jui_line", (const void*)w_jui_line);
+        csx_register_internal_call("Joy.Jui::jui_text", (const void*)w_jui_text);
+        csx_register_internal_call("Joy.Jui::jui_text_centered", (const void*)w_jui_text_centered);
+        csx_register_internal_call("Joy.Jui::jui_panel_begin", (const void*)w_jui_panel_begin);
         csx_register_internal_call("Joy.Jui::jui_panel_end", (const void*)w_jui_panel_end);
+        csx_register_internal_call("Joy.Jui::jui_panel_frame", (const void*)w_jui_panel_frame);
+        csx_register_internal_call("Joy.Jui::jui_scroll_begin", (const void*)w_jui_scroll_begin);
         csx_register_internal_call("Joy.Jui::jui_scroll_end", (const void*)w_jui_scroll_end);
+        csx_register_internal_call("Joy.Jui::jui_scrollbar", (const void*)w_jui_scrollbar);
         csx_register_internal_call("Joy.Jui::jui_scroll_set_offset", (const void*)w_jui_scroll_set_offset);
+        csx_register_internal_call("Joy.Jui::jui_button", (const void*)w_jui_button);
         csx_register_internal_call("Joy.Jtilemap::jtilemap_load_file_json", (const void*)w_jtilemap_load_file_json);
         csx_register_internal_call("Joy.Jtilemap::jtilemap_destroy", (const void*)w_jtilemap_destroy);
         csx_register_internal_call("Joy.Jtilemap::jtilemap_get_width", (const void*)w_jtilemap_get_width);

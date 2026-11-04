@@ -20,6 +20,8 @@
  */
 typedef struct _MonoClass MonoClass;
 typedef struct _MonoObject MonoObject;
+typedef struct _MonoMethod MonoMethod;
+typedef struct csx_method csx_method_t, * csx_method_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +42,15 @@ MonoObject* csx_invoke_static_method(csx_p csx, const char* namespace_name,
                                      const char* class_name, const char* method_name,
                                      void** args);
 void csx_register_internal_call(const char* name, const void* method);
+
+/* ---- 方法句柄缓存 ----
+ * 帧回调这类高频调用不要每次走 csx_invoke_static_method（内部要反射查找），
+ * 先用 csx_find_method 查一次，之后 csx_invoke_method 直接调。
+ * param_count 传 -1 表示忽略参数个数。 */
+csx_method_p csx_find_method(csx_p csx, const char* namespace_name, const char* class_name,
+                             const char* method_name, int param_count);
+MonoObject* csx_invoke_method(csx_p csx, csx_method_p method, void** args);
+void csx_method_free(csx_method_p method);
 
 /* 工作线程调用 managed 代码前确保已 attach（幂等；csx_invoke_static_method 内部已自动处理） */
 void csx_thread_attach(csx_p csx);
