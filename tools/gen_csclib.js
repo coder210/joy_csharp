@@ -5,7 +5,8 @@
  * 用法（任意目录）：
  *     node tools/gen_csclib.js [--joy <joy 源码目录>]
  *
- * joy 源码目录（其下须有 joy.h）优先级：--joy 参数 > 环境变量 JOY_DIR > 同级 ../joy。
+ * joy 源码目录（其下须有 joy.h）优先级：--joy 参数 > 环境变量 JOY_DIR
+ * > 仓内子模块 third_party/joy > 同级 ../joy。
  *
  * 产出：
  *     csclib/generated/csclib_generated.c
@@ -42,6 +43,9 @@ function resolveJoyDir() {
   if (i !== -1 && process.argv[i + 1]) return path.resolve(process.argv[i + 1]);
   if (process.env.JOY_DIR) return path.resolve(process.env.JOY_DIR);
   if (IN_JOY_REPO) return JOY_REPO;          /* joy 主仓：joy.h 就在仓根 */
+  /* 独立仓：优先用仓内子模块 third_party/joy */
+  const sub = path.resolve(REPO, 'third_party/joy');
+  if (fs.existsSync(path.join(sub, 'joy.h'))) return sub;
   return path.resolve(REPO, '../joy');
 }
 

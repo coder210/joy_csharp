@@ -32,6 +32,7 @@ csclib/                   C# → C 的 internal call 胶水层
   generated/              生成器产出（勿手改）
 tools/gen_csclib.js       绑定代码生成器
 assets/                   模板资源（玩家/敌人精灵、字体）
+third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
 ```
 
 ## 运行时架构
@@ -53,10 +54,21 @@ C 宿主 app/main.c                          C# 业务 JoyGame.dll
 
 | 依赖 | 说明 |
 |---|---|
-| joy 源码树 | 其下有 `joy.h`（`-DJOY_SOURCE_DIR=`） |
+| joy 引擎 | 仓内 **git 子模块** `third_party/joy`（`git submodule update --init`） |
 | Mono 开发包 | `MONO_INCLUDE_DIR` / `MONO_LIBRARIES` / 运行期 `mono-2.0-sgen.dll` |
 | .NET SDK 8 | 编译 `JoyGame.dll`（目标框架 netstandard2.0，供 Mono 加载） |
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
+
+## 获取代码
+
+```powershell
+git clone --recursive https://github.com/coder210/joy_csharp.git
+# 已 clone 过（或想同步 joy）：
+git submodule update --init --recursive
+```
+
+`third_party/joy` 指向 `coder210/joy` 的固定提交，构建脚本默认就用它，无需再传 `-DJOY_SOURCE_DIR`。
+要临时换用另一份 joy 源码树时，仍可 `-DJOY_SOURCE_DIR=<含 joy.h 的目录>` 覆盖。
 
 ## 构建与运行（Windows）
 
@@ -65,8 +77,7 @@ C 宿主 app/main.c                          C# 业务 JoyGame.dll
 dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
 
 # 2) C++ 宿主（CMake 会自动把 assets / JoyGame.dll / mono 运行时拷到输出目录）
-cmake -S app -B build/app -A x64 `
-  -DJOY_SOURCE_DIR="D:/github/joy_topdown_template/third_party/joy"
+cmake -S app -B build/app -A x64
 cmake --build build/app --config Release --parallel
 
 # 3) 运行（也可先 cd 到 build/app/bin/Release）
@@ -111,8 +122,8 @@ $env:SDL_VIDEODRIVER="dummy"
 重新生成：
 
 ```powershell
-node tools/gen_csclib.js --joy "D:/github/joy_topdown_template/third_party/joy"
-# 默认取同级 ../joy；也可用环境变量 JOY_DIR
+node tools/gen_csclib.js
+# 默认取仓内子模块 third_party/joy；也可用 --joy <目录> 或环境变量 JOY_DIR 覆盖
 ```
 
 生成器规则：
@@ -134,7 +145,7 @@ node tools/gen_csclib.js --joy "D:/github/joy_topdown_template/third_party/joy"
 
 `.github/workflows/windows-build.yml`（仅 Windows x64）：
 
-1. 拉取 joy 源码（pin 到与绑定一致的提交）
+1. `checkout` 时递归拉取子模块（joy 提交号由 gitlink 固定）
 2. 装 .NET 8 + Mono
 3. `dotnet build` C# 业务
 4. CMake + MSVC 构建宿主

@@ -2,11 +2,13 @@
 # joy_csharp —— joy 的可选 C#(Mono) 脚本后端
 #
 # 依赖：
-#   joy 源码树（其下有 joy.h）  -DJOY_SOURCE_DIR=<含 joy.h 的目录>
+#   joy 源码树（其下有 joy.h）  默认用仓内子模块 third_party/joy，
+#                              换源时才需 -DJOY_SOURCE_DIR=<含 joy.h 的目录>
 #   Mono 开发包                -DMONO_INCLUDE_DIR=... -DMONO_LIBRARIES=...
 #
 # 用法：
-#   单独构建：cmake -S . -B build -DJOY_SOURCE_DIR=... ...
+#   git submodule update --init --recursive
+#   单独构建：cmake -S . -B build ...
 #   上层工程：add_subdirectory(joy_csharp) 后 target_link_libraries(<t> PRIVATE joy_csharp)
 #
 # 未启用本模块时 joy 核心不需要 Mono，也不依赖本仓。
@@ -23,10 +25,12 @@ if(TARGET joy_csharp)
 endif()
 
 # ---- joy 源码树定位 ---------------------------------------------------------
-# 默认在同级目录里找 joy/ 或 joy_topdown_template/third_party/joy（本机常见布局）。
+# 默认用仓内子模块 third_party/joy（git submodule update --init），
+# 其次找同级 joy/ 或 joy_topdown_template/third_party/joy。
 set(JOY_SOURCE_DIR "" CACHE PATH "joy 源码目录（其下须有 joy.h）")
 if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
     foreach(_joy_cand
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/joy"
         "${CMAKE_CURRENT_SOURCE_DIR}/../joy"
         "${CMAKE_CURRENT_SOURCE_DIR}/../joy_topdown_template/third_party/joy")
         if(EXISTS "${_joy_cand}/joy.h")

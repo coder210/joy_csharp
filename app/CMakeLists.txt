@@ -6,9 +6,8 @@
 #   ../          本仓的 C# 绑定模块（joy_csharp 静态库）
 #   ../csharp    C# 业务程序集 JoyGame.dll（dotnet build 产出）
 #
-# 用法（在 app/ 目录）：
+# 用法（在 app/ 目录，joy 默认取仓内子模块 third_party/joy）：
 #   cmake -S . -B ../build/app -A x64 \
-#         -DJOY_SOURCE_DIR=<含 joy.h 的目录> \
 #         -DMONO_INCLUDE_DIR=... -DMONO_LIBRARIES=...
 #   cmake --build ../build/app --config Release
 # ============================================================
@@ -18,9 +17,12 @@ project(joy_csharp_app C CXX)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 # ---- joy 源码树（其下有 joy.h）---------------------------------------------
+# 默认用仓内子模块 third_party/joy（git submodule update --init），
+# 也兼容与 joy 源码树同级、或从别的工程里复用 joy 的场景。
 set(JOY_SOURCE_DIR "" CACHE PATH "joy 源码目录（其下须有 joy.h）")
 if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
     foreach(_joy_cand
+        "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/joy"
         "${CMAKE_CURRENT_SOURCE_DIR}/../../joy"
         "${CMAKE_CURRENT_SOURCE_DIR}/../../joy_topdown_template/third_party/joy")
         if(EXISTS "${_joy_cand}/joy.h")

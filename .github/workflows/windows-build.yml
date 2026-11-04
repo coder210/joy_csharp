@@ -6,25 +6,21 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  JOY_REPO: https://github.com/coder210/joy
-  # 与本仓绑定生成所用的 joy 提交保持一致，避免 upsteam 变更导致 CI 飘
-  JOY_REF: 50470ae132971e70e830bbc50ec3dbc8202c8443
-
 jobs:
   windows-x64:
     name: Windows x64 (MSVC + Mono)
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      # joy 引擎以 git 子模块 third_party/joy 引入（提交号固定在本仓 gitlink 里）
+      - name: Checkout (with joy submodule)
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Checkout joy engine (pinned)
+      - name: Show joy submodule commit
         shell: pwsh
-        run: |
-          git clone --filter=blob:none --no-checkout $env:JOY_REPO third_party/joy
-          git -C third_party/joy checkout $env:JOY_REF
+        run: git -C third_party/joy log --oneline -1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -48,7 +44,6 @@ jobs:
       - name: Configure CMake
         run: >
           cmake -S app -B build/app -A x64
-          -DJOY_SOURCE_DIR="${{ github.workspace }}/third_party/joy"
           -DMONO_INCLUDE_DIR="C:/Program Files/Mono/include/mono-2.0"
           -DMONO_LIBRARIES="C:/Program Files/Mono/lib/mono-2.0-sgen.lib"
           -DMONO_RUNTIME_DLL="C:/Program Files/Mono/bin/mono-2.0-sgen.dll"
