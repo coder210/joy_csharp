@@ -1,0 +1,10 @@
+# 生成物：不展开 diff、不计语言统计
+csclib/generated/* linguist-generated=true
+csharp/Joy/InternalCalls.cs linguist-generated=true
+
+# 文本文件统一按平台换行处理
+* text=auto
+*.png binary
+*.ttf binary
+*.TTF binary
+*.dll binary

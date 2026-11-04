@@ -1,107 +1,145 @@
 # joy_csharp
 
-joy 引擎的可选 **C#（Mono）脚本后端**，包含绑定层、绑定代码生成器与端到端测试工程。
+joy 引擎的 **C# 脚本模板**：C 侧只留窗口 / 主循环 / 事件泵，**业务逻辑（场景、玩法、渲染调用）全部写在 C#**，通过 Mono 以 internal call 双向绑定。
 
-- joy 核心本身**不依赖**本仓，也不需要 Mono。
-- 只有想让 C# 脚本/程序集驱动引擎的工程才链接本仓。
-- 依赖：joy 公共 API（`<joy/joy.h>`）+ Mono 开发包（`mono/metadata/*`）。
+一个可直接运行的最小可玩模板：菜单 → 战斗（移动/射击/敌人 AI/击杀）→ 死亡结算，并带无窗口冒烟测试与 Windows CI。
 
 ## 目录结构
 
 ```
-CMakeLists.txt                 模块本体，产出静态库 joy_csharp
-joy_csharp.h                   C++ 侧 API（csx_*，Mono 句柄仅作不透明前置声明）
-joy_csharp.c                   Mono 嵌入宿主（create / load_assembly / invoke_static_method）
+app/                      C++ 宿主（可执行 joy_csharp_app）
+  main.c                  窗口 + 主循环 + SDL 事件泵；每帧回调 C# Host.OnFrame
+  CMakeLists.txt          宿主构建（含 assets / JoyGame.dll / mono 运行时拷贝）
 
-csclib/                        C# → C 的 internal call 胶水层
-  csclib.h
-  sdl.c sys.c mathx.c kcp.c collision.c utils.c   手写部分
-  generated/csclib_generated.c / .h               由生成器产出（勿手改）
+csharp/                   C# 业务（程序集 JoyGame.dll，netstandard2.0）
+  JoyGame.csproj
+  Joy/InternalCalls.cs    自动生成的绑定声明（勿手改）
+  game/
+    Native.cs             手写 internal call 声明（Joy.Draw / Joy.Input / Joy.Host）
+    Host.cs               入口：OnInit / OnFrame / OnShutdown
+    GameApp.cs            场景管理 + 资源 + 输入快照
+    MenuScene.cs / PlayScene.cs / GameOverScene.cs
+    Player.cs / Enemy.cs / Bullet.cs
+    SmokeScript.cs        无窗口冒烟脚本（模拟按键 + 断言）
+    Painter.cs / Assets.cs / InputState.cs / Keys.cs
 
-csharp/Joy/InternalCalls.cs    C# 侧 internal call 声明（生成物，勿手改）
-
-tools/gen_csclib.js            绑定代码生成器：扫 joy.h → 生成 csclib_generated.* + InternalCalls.cs
-
-test/                          端到端测试工程
-  CMakeLists.txt               C++ 测试宿主的 CMake
-  main.c                       C++ 测试 main（C++ → C# → C++ 双向调用）
-  cs/JoyTest.csproj            C# 测试项目（复用本仓 InternalCalls.cs）
-  cs/Calc.cs                   被测方法（纯 C#）
-  cs/Glue.cs                   走 internal call 回 C 的用例（utils_*）
-  cs/hello.txt                 utils_read_file 的读文件样例
+joy_csharp.h / .c         Mono 宿主（csx_*：创建 / 加载程序集 / 反射调用 / 方法句柄缓存）
+csclib/                   C# → C 的 internal call 胶水层
+  draw.c                  绘制热点（扁平参数：图片 / 矩形 / 文字 / 线）
+  input.c                 宿主写入键鼠状态，C# 轮询
+  host.c                  日志 / 退出 / 退出码
+  utils.c sys.c sdl.c mathx.c kcp.c collision.c   其他手写部分
+  generated/              生成器产出（勿手改）
+tools/gen_csclib.js       绑定代码生成器
+assets/                   模板资源（玩家/敌人精灵、字体）
 ```
 
-## 构建模块
+## 运行时架构
+
+```
+C 宿主 app/main.c                          C# 业务 JoyGame.dll
+  SDL_AppInit   创建窗口 / r2d / Mono  ──►  Host.OnInit(win, r2d, w, h, smoke)
+  SDL_AppEvent  键鼠事件写输入桥        ──►  （C# 通过 Joy.Input 轮询）
+  SDL_AppIterate r2d_begin            ──►  Host.OnFrame(dt) ──► 场景 Update/Render
+                 r2d_end（present）
+  SDL_AppQuit                        ──►  Host.OnShutdown()
+```
+
+- C 侧不写任何玩法代码，只负责"帧边界 + 事件泵 + Mono 生命周期"。
+- C# 侧通过 internal call 调 joy 的 C API，天然与引擎逻辑同进程、零 IPC。
+- 帧回调走 `csx_find_method` 缓存的方法句柄，不做每帧反射查找。
+
+## 依赖
+
+| 依赖 | 说明 |
+|---|---|
+| joy 源码树 | 其下有 `joy.h`（`-DJOY_SOURCE_DIR=`） |
+| Mono 开发包 | `MONO_INCLUDE_DIR` / `MONO_LIBRARIES` / 运行期 `mono-2.0-sgen.dll` |
+| .NET SDK 8 | 编译 `JoyGame.dll`（目标框架 netstandard2.0，供 Mono 加载） |
+| CMake ≥ 3.16 + MSVC | 构建宿主 |
+
+## 构建与运行（Windows）
 
 ```powershell
-cmake -S . -B build `
-  -DJOY_SOURCE_DIR="D:/github/joy_topdown_template/third_party/joy" `
-  -DMONO_INCLUDE_DIR="C:/Program Files/Mono/include/mono-2.0" `
-  -DMONO_LIBRARIES="C:/Program Files/Mono/lib/mono-2.0-sgen.lib"
-cmake --build build --config Release
+# 1) C# 业务程序集
+dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
+
+# 2) C++ 宿主（CMake 会自动把 assets / JoyGame.dll / mono 运行时拷到输出目录）
+cmake -S app -B build/app -A x64 `
+  -DJOY_SOURCE_DIR="D:/github/joy_topdown_template/third_party/joy"
+cmake --build build/app --config Release --parallel
+
+# 3) 运行（也可先 cd 到 build/app/bin/Release）
+.\build\app\bin\Release\joy_csharp_app.exe
 ```
 
-作为上层工程的子模块使用时：
+操作：`WASD` 移动 · `Space` 或鼠标左键射击 · `Esc` 返回菜单 / 退出。
 
-```cmake
-add_subdirectory(third_party/joy_csharp)
-target_link_libraries(<game> PRIVATE joy_csharp)
-```
+### 参数
 
-`ENABLED_CSHARP_SCRIPT` 由本模块 `PUBLIC` 传递，宿主侧 `joy_script_stub.c` 据此关闭桩实现。
+| 参数 | 说明 |
+|---|---|
+| `--smoke N` | 无窗口冒烟：dummy 视频驱动 + 固定 60Hz，跑 N 帧后按断言结果退出 |
+| `--assembly PATH` | 指定程序集（默认 `JoyGame.dll`，相对当前工作目录） |
 
-## 端到端测试
+### 冒烟测试
 
 ```powershell
-# 1) 编译 C# 被测程序，产出 JoyTest.dll
-dotnet build test/cs/JoyTest.csproj -c Release -o test/cs/out
-
-# 2) 编译 C++ 测试宿主（CMakeLists 在 test/ 下）
-cmake -S test -B build/e2e `
-  -DJOY_SOURCE_DIR="D:/github/joy_topdown_template/third_party/joy" `
-  -DMONO_INCLUDE_DIR="C:/Program Files/Mono/include/mono-2.0" `
-  -DMONO_LIBRARIES="C:/Program Files/Mono/lib/mono-2.0-sgen.lib"
-cmake --build build/e2e --config Release
-
-# 3) 把运行期产物放到 exe 同目录后运行
-copy test/cs/out/JoyTest.dll build/e2e/Release/
-copy test/cs/hello.txt      build/e2e/Release/
-./build/e2e/Release/joy_csharp_e2e.exe
+cd build/app/bin/Release
+$env:SDL_VIDEODRIVER="dummy"
+.\joy_csharp_app.exe --smoke 180    # 退出码 0 = 通过
 ```
 
-预期输出：
+脚本模拟按键跑完 **Menu → Play → GameOver → 重开 Play**，断言：
 
-```
-csx_load_assembly OK
-Add(3,4) = 7
-Hello -> Hello, Mono
-Bootstrap.Run -> exists=True, len=21, n1=..., n2=..., wave_seed=...
-csx_release OK
-```
+- 结构体按值传递的 ABI 正确（`abi=True`）
+- 场景切换发生 2 次（菜单进游戏、死亡后重开）
+- 输入真的驱动了移动、射击
+- 子弹命中并击杀敌人
+- 敌人 AI 确实在靠近玩家
 
-覆盖三条链路：
+输出 `[smoke] PASS abi=True play=2 ...` 并退出；失败则 `[smoke] FAIL ...` 且退出码为 1。
 
-1. `csx_load_assembly` 从文件加载程序集；
-2. `csx_invoke_static_method` 反射调用纯 C# 静态方法（`Calc.Add` / `Calc.Hello`）；
-3. C# 侧 `[MethodImpl(InternalCall)]` 回调 C（`Joy.Utils.utils_*`、以及生成的 `Joy.<Class>::<func>`）。
+## 绑定体系
 
-## 重新生成绑定
+| 层 | 内容 | 维护方式 |
+|---|---|---|
+| 自动生成 | 603 个 joy C API（标量 / 字符串 / 不透明指针 / ≤16 字节小结构体按值） | `tools/gen_csclib.js` |
+| 手写热点 | `Joy.Draw`（图片、矩形、线、文字、贴图尺寸）、`Joy.Input`、`Joy.Host` | `csclib/draw.c`、`input.c`、`host.c` |
+| 手写 POC | `utils_*` 等早期接口 | `csclib/utils.c` |
+
+重新生成：
 
 ```powershell
 node tools/gen_csclib.js --joy "D:/github/joy_topdown_template/third_party/joy"
+# 默认取同级 ../joy；也可用环境变量 JOY_DIR
 ```
 
-默认 joy 源码目录为同级 `../joy`（其下须有 `joy.h`），也可用环境变量 `JOY_DIR` 指定。
+生成器规则：
 
-生成器只转换"可安全自动转换"的子集：
+- 标量 → 同名 C# 类型；`const char*` 入参 → `string`；`*_p` / `void*` → `IntPtr`
+- **小结构体**（字段全标量、总大小 ≤ 16 字节，如 `vec2_t` / `jrect_t` / `jcolor_t`）→ C# `[StructLayout(Sequential)]` 结构体，按值传参
+- 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `csclib/draw.c` 的扁平包装覆盖
 
-- 标量（`int` / `uint32_t` / `float` / `double` / `bool` …）→ 同名 C# 类型；
-- `const char*` 入参 → `string`（wrapper 内 `mono_string_to_utf8`，调用后释放）；
-- 不透明指针 `*_p`、`void*` → `IntPtr`。
+绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
-跳过：返回 `char*`、结构体/结构体指针、数组、函数指针、可变参数、输出参数（`T*`）、
-`utils_` / `jspine_` / `modules_` 前缀与 `jecs_test`（由 `csclib/utils.c` 手写或未链接）。
-手写部分请放在 `csclib/*.c` 并在 `csclib.h` 中声明 `csopen_*()`，由 `joy_csharp.c` 注册。
+## 扩展指引
+
+- **加一个场景**：实现 `IScene`（`Enter/Update/Render`），用 `app.ChangeScene(new XxxScene())` 切换。
+- **加一种敌人**：复制 `Enemy.cs` 的字段，在 `PlayScene.UpdateSpawn` 里决定生成规则，`Render` 里选精灵。
+- **加绘制**：优先用 `Painter`；需要新 API 时在 `csclib/draw.c` 加扁平包装 + `Native.cs` 声明 + 注册一行。
+- **加输入**：`csclib/input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `Keys` 常量或数字。
+
+## CI
+
+`.github/workflows/windows-build.yml`（仅 Windows x64）：
+
+1. 拉取 joy 源码（pin 到与绑定一致的提交）
+2. 装 .NET 8 + Mono
+3. `dotnet build` C# 业务
+4. CMake + MSVC 构建宿主
+5. `joy_csharp_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
+6. 上传 exe + dll + assets 产物
 
 ## License
 
