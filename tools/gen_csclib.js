@@ -29,12 +29,19 @@ const fs = require('fs');
 const path = require('path');
 
 const HERE = __dirname;
-const REPO = path.resolve(HERE, '..'); // tools -> repo
+// 两种落地布局都支持：
+//   独立仓 joy_csharp：tools/ 在仓根            → 模块根 = 仓根
+//   joy 主仓：          modules/csharp/tools     → 模块根 = modules/csharp，joy.h 在仓根
+const REPO = path.resolve(HERE, '..');
+const JOY_REPO = path.resolve(HERE, '../../..');
+const IN_JOY_REPO = fs.existsSync(path.join(JOY_REPO, 'joy.h'));
+const MODULE = IN_JOY_REPO ? path.join(JOY_REPO, 'modules/csharp') : REPO;
 
 function resolveJoyDir() {
   const i = process.argv.indexOf('--joy');
   if (i !== -1 && process.argv[i + 1]) return path.resolve(process.argv[i + 1]);
   if (process.env.JOY_DIR) return path.resolve(process.env.JOY_DIR);
+  if (IN_JOY_REPO) return JOY_REPO;          /* joy 主仓：joy.h 就在仓根 */
   return path.resolve(REPO, '../joy');
 }
 
@@ -44,9 +51,9 @@ if (!fs.existsSync(JOY_H)) {
   console.error(`未找到 ${JOY_H}，请用 --joy <joy 源码目录>（其下须有 joy.h）指定`);
   process.exit(1);
 }
-const OUT_C = path.join(REPO, 'csclib/generated/csclib_generated.c');
-const OUT_H = path.join(REPO, 'csclib/generated/csclib_generated.h');
-const OUT_CS = path.join(REPO, 'csharp/Joy/InternalCalls.cs');
+const OUT_C = path.join(MODULE, 'csclib/generated/csclib_generated.c');
+const OUT_H = path.join(MODULE, 'csclib/generated/csclib_generated.h');
+const OUT_CS = path.join(MODULE, 'csharp/Joy/InternalCalls.cs');
 
 // ---- 结构体（按值传递）----------------------------------------------------
 // 只收「字段全为标量且总大小 <= 16 字节」的结构体：这类在 x64 上按值传递最稳，
