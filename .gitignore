@@ -1,0 +1,14 @@
+# 构建产物
+build/
+build*/
+out/
+bin/
+obj/
+.vs/
+CMakeLists.txt.user
+CMakeUserPresets.json
+compile_commands.json
+
+# .NET
+*.user
+*.suo
