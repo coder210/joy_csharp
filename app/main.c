@@ -21,6 +21,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(_WIN32)
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 
 #define APP_TITLE "Joy C# Topdown"
 #define APP_W 480
@@ -46,9 +51,27 @@ static int find_arg(int argc, char* argv[], const char* name)
         return -1;
 }
 
+/* 把工作目录切到 exe 所在目录：
+ * JoyGame.dll 与 assets/ 都按相对路径加载，这样从任意目录启动（双击、
+ * 快捷方式、CI 里在仓库根执行）都能找到资源。 */
+static void chdir_to_exe_dir(void)
+{
+        /* SDL3 的 SDL_GetBasePath 返回 const char*，内存由 SDL 内部缓存管理，
+         * 不要 SDL_free（否则退出时堆损坏）。 */
+        const char* base = SDL_GetBasePath();
+        if (!base) return;
+#if defined(_WIN32)
+        _chdir(base);
+#else
+        chdir(base);
+#endif
+}
+
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 {
         (void)appstate;
+
+        chdir_to_exe_dir();
 
         int i = find_arg(argc, argv, "--smoke");
         if (i >= 0 && i + 1 < argc) g_smoke_frames = atoi(argv[i + 1]);
