@@ -89,16 +89,21 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 换回系统 Mono 则需同时改 CMake 的运行时段与 post-build 拷贝。post-build 会先清空
 输出目录的 `lib/` 再拷贝，避免裁剪后残留旧程序集。
 
-`libs/` 只保留 **12 个文件 / 约 4.74 MB** 的语言与数据结构核心：
+`libs/` 只保留 **4 个文件 / 约 4.5 MB** 的语言与数据结构核心：
 `System.Private.CoreLib.dll`（基础类型、`List<T>`、`Dictionary<,>`、委托、字符串，
-占绝大部分体积），`netstandard.dll` / `mscorlib.dll` / `System.dll` / `System.Core.dll`
-（兼容 facade），`System.Collections.dll`，`System.Runtime.dll` /
-`System.Runtime.Extensions.dll` / `System.Runtime.InteropServices.dll` /
-`System.Runtime.CompilerServices.Unsafe.dll`（类型转发与 internal call 所需），
-`System.AppContext.dll`、`Microsoft.NETCore.App.runtimeconfig.json`。
+占绝大部分体积，由运行时内部加载），以及 `netstandard.dll` /
+`System.Runtime.dll` / `System.Collections.dll` 三个 facade。`JoyGame.dll` 以
+netstandard2.0 编译，元数据只引用这三个程序集，逐个移出实测都会导致冒烟失败，
+因此这是当前编译目标下的下限。原先附带的 `mscorlib.dll`、`System.dll`、
+`System.Core.dll`、`System.AppContext.dll`、`System.Runtime.Extensions.dll`、
+`System.Runtime.InteropServices.dll`、
+`System.Runtime.CompilerServices.Unsafe.dll`、
+`Microsoft.NETCore.App.runtimeconfig.json` 均无引用，已实测删除。
 网络（`System.Net.*`）、线程 / Task、IO / Console、反射、Globalization、正则、
 Linq、Xml / Json、数据、序列化、加密、VB / C# 动态等全部移除；
 `Microsoft.NETCore.App.deps.json` 也已移除（实测运行时不依赖）。
+运行时根目录那份重复的 `System.Private.CoreLib.dll` 构建时从不拷贝，一并删除。
+CoreLib 独占 4.48 MB，再减体积只能靠 IL trimming 或重建 CoreLib，删 facade 无效。
 
 因此 C# 业务侧只能用最基础的语法与集合类型，`Console` / `File` / LINQ /
 `Task` / `Thread` 等不可用，需要的能力由业务侧自行封装；也可把对应程序集从
