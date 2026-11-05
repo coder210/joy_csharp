@@ -36,11 +36,22 @@ if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
         "joy_csharp_test_app: 找不到 joy 源码树，请设置 -DJOY_SOURCE_DIR=<含 joy.h 的目录>")
 endif()
 
-# ---- Mono 开发包 -----------------------------------------------------------
-set(MONO_INCLUDE_DIR "C:/Program Files/Mono/include/mono-2.0" CACHE PATH "Mono include")
-set(MONO_LIBRARIES   "C:/Program Files/Mono/lib/mono-2.0-sgen.lib" CACHE FILEPATH "Mono lib")
-# 运行期需要把 mono 运行时 DLL 放到 exe 旁边
-set(MONO_RUNTIME_DLL "C:/Program Files/Mono/bin/mono-2.0-sgen.dll" CACHE FILEPATH "Mono runtime DLL")
+# ---- C# 运行时：joy 子项目 modules/csharp/runtime 提供 ----------------------
+# 该构建来自 dotnet/runtime：coreclr.dll 内静态链接了 Mono 运行时组件，
+# 同时导出 coreclr_* 与 mono_* 两套宿主 API，因此 joy_csharp.c / csclib
+# 仍可沿用 Mono 嵌入 API，无需重写宿主层；BCL 在 libs/（net8.0）。
+# 需要换成别的运行时时：-DJOY_CLR_ROOT=<含 coreclr.dll 的目录>。
+set(JOY_CLR_ROOT "${JOY_SOURCE_DIR}/modules/csharp/runtime/windows.x64.Release"
+    CACHE PATH "CoreCLR 运行时目录（默认取 joy 子项目 modules/csharp/runtime）")
+# 缓存里若还留着已失效的旧路径，自动回退到 joy 子项目内置的那套
+set(_clr_root "${JOY_SOURCE_DIR}/modules/csharp/runtime/windows.x64.Release")
+if(JOY_CLR_ROOT AND EXISTS "${JOY_CLR_ROOT}/coreclr.dll")
+    set(_clr_root "${JOY_CLR_ROOT}")
+endif()
+set(MONO_INCLUDE_DIR "${_clr_root}/include/mono-2.0")
+set(MONO_LIBRARIES   "${_clr_root}/coreclr.import.lib")
+set(MONO_RUNTIME_DLL "${_clr_root}/coreclr.dll")
+set(JOY_CLR_LIB_DIR  "${_clr_root}/libs")
 
 # ---- C# 业务程序集 ---------------------------------------------------------
 set(JOY_GAME_DLL "${CMAKE_CURRENT_SOURCE_DIR}/build/csharp/JoyGame.dll"
@@ -58,7 +69,22 @@ include("${JOY_SOURCE_DIR}/joy_add.cmake")
 add_executable(joy_csharp_test_app main.c)
 joy_add_sources(joy_csharp_test_app MODULES csharp)
 
-# ---- 运行期产物：assets/ + JoyGame.dll + mono 运行时 ------------------------
+# ---- Visual Studio：把 C# 工程一并挂进生成的解决方案 -----------------------
+# 仅 VS 生成器生效，其它生成器忽略。C# 仍由 dotnet build 产出 JoyGame.dll，
+# 这里只为在 VS 里同时浏览 / 生成 C# 业务代码，不改变 cmake --build 的行为。
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    include_external_msproject(
+        JoyGame
+        "${CMAKE_CURRENT_SOURCE_DIR}/csharp/JoyGame.csproj"
+        TYPE "FAE04EC0-301F-11D3-BF4B-00C04F79EFBC"
+        PLATFORM "Any CPU")
+    # C# 工程只有 Debug/Release 两个配置；把 CMake 的 MinSizeRel /
+    # RelWithDebInfo 映射过去，否则 VS 会提示「配置映射不正确」。
+    set_property(TARGET JoyGame PROPERTY MAP_IMPORTED_CONFIG_MINSIZEREL Release)
+    set_property(TARGET JoyGame PROPERTY MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+endif()
+
+# ---- 运行期产物：assets/ + JoyGame.dll + CoreCLR 运行时与 BCL ---------------
 set(_app_out "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>")
 
 add_custom_command(TARGET joy_csharp_test_app POST_BUILD
@@ -78,10 +104,19 @@ endif()
 
 if(EXISTS "${MONO_RUNTIME_DLL}")
     add_custom_command(TARGET joy_csharp_test_app POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MONO_RUNTIME_DLL}" "${_app_out}/mono-2.0-sgen.dll"
-        COMMENT "Copying mono runtime")
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MONO_RUNTIME_DLL}" "${_app_out}/coreclr.dll"
+        COMMENT "Copying coreclr.dll")
 else()
-    message(WARNING "未找到 Mono 运行时 ${MONO_RUNTIME_DLL}：运行时需要 mono-2.0-sgen.dll 与 exe 同目录")
+    message(WARNING "未找到运行时 ${MONO_RUNTIME_DLL}：coreclr.dll 需与 exe 同目录")
+endif()
+
+if(EXISTS "${JOY_CLR_LIB_DIR}")
+    add_custom_command(TARGET joy_csharp_test_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${_app_out}/lib"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${JOY_CLR_LIB_DIR}" "${_app_out}/lib"
+        COMMENT "Copying .NET BCL (lib/)")
+else()
+    message(WARNING "未找到 BCL 目录 ${JOY_CLR_LIB_DIR}：运行时需要 lib/ 与 exe 同目录")
 endif()
 
 # ---- 冒烟测试 --------------------------------------------------------------

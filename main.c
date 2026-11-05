@@ -67,11 +67,28 @@ static void chdir_to_exe_dir(void)
 #endif
 }
 
+/* 仓内 CoreCLR 运行时的 BCL 放在 exe 旁的 lib/。
+ * joy 的 csx_setup_mono_dirs() 只认系统 Mono 安装路径或 MONO_LIB_DIR，
+ * 因此必须在 csx_create() 之前显式把目录指过去。 */
+static void setup_clr_dirs(void)
+{
+        const char* base = SDL_GetBasePath();
+        if (!base) return;
+        char lib[512];
+        snprintf(lib, sizeof(lib), "%slib", base);
+#if defined(_WIN32)
+        _putenv_s("MONO_LIB_DIR", lib);
+#else
+        setenv("MONO_LIB_DIR", lib, 1);
+#endif
+}
+
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 {
         (void)appstate;
 
         chdir_to_exe_dir();
+        setup_clr_dirs();
 
         int i = find_arg(argc, argv, "--smoke");
         if (i >= 0 && i + 1 < argc) g_smoke_frames = atoi(argv[i + 1]);
@@ -98,7 +115,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
         g_csx = csx_create();
         if (!g_csx) {
-                fprintf(stderr, "[host] csx_create failed (Mono runtime unavailable?)\n");
+                fprintf(stderr, "[host] csx_create failed (CLR runtime unavailable?)\n");
                 return SDL_APP_FAILURE;
         }
         if (!csx_load_assembly(g_csx, g_assembly)) {
@@ -124,7 +141,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
                 csx_invoke_method(g_csx, g_on_init, args);
         }
 
-        printf("[host] mono up, assembly=%s, smoke=%d\n", g_assembly, g_smoke_frames);
+        printf("[host] clr up, assembly=%s, smoke=%d\n", g_assembly, g_smoke_frames);
         fflush(stdout);
         g_last_tick = SDL_GetTicks();
         return SDL_APP_CONTINUE;

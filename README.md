@@ -1,6 +1,6 @@
 # joy_csharp_test
 
-joy 引擎的 **C# 脚本模板**：C 侧只留窗口 / 主循环 / 事件泵，**业务逻辑（场景、玩法、渲染调用）全部写在 C#**，通过 Mono 以 internal call 双向绑定。
+joy 引擎的 **C# 脚本模板**：C 侧只留窗口 / 主循环 / 事件泵，**业务逻辑（场景、玩法、渲染调用）全部写在 C#**，通过仓内自带的 .NET 8 CoreCLR 运行时以 internal call 双向绑定。
 
 一个可直接运行的最小可玩模板：菜单 → 战斗（移动/射击/敌人 AI/击杀）→ 死亡结算，并带无窗口冒烟测试与 Windows CI。
 
@@ -27,7 +27,8 @@ csharp/                   C# 工程（程序集 JoyGame.dll，netstandard2.0）
 assets/                   模板资源（玩家/敌人精灵、字体）
 third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
   modules/csharp/         C# 绑定模块：Mono 宿主 joy_csharp.c/.h、csclib/、
-                          csharp/Joy/InternalCalls.cs、tools/gen_csclib.js
+                          csharp/Joy/InternalCalls.cs、tools/gen_csclib.js、
+                          runtime/windows.x64.Release/（CoreCLR 运行时 + BCL）
 ```
 
 ## 模块归属
@@ -57,14 +58,14 @@ git 子模块不会随本仓提交（主仓只记录 gitlink），他人 clone �
 
 ```
 C 宿主 main.c                              C# 业务 JoyGame.dll
-  SDL_AppInit   创建窗口 / r2d / Mono  ──►  Host.OnInit(win, r2d, w, h, smoke)
+  SDL_AppInit   创建窗口 / r2d / CoreCLR ──► Host.OnInit(win, r2d, w, h, smoke)
   SDL_AppEvent  键鼠事件写输入桥        ──►  （C# 通过 Joy.Input 轮询）
   SDL_AppIterate r2d_begin            ──►  Host.OnFrame(dt) ──► 场景 Update/Render
                  r2d_end（present）
   SDL_AppQuit                        ──►  Host.OnShutdown()
 ```
 
-- C 侧不写任何玩法代码，只负责"帧边界 + 事件泵 + Mono 生命周期"。
+- C 侧不写任何玩法代码，只负责"帧边界 + 事件泵 + CLR 生命周期"。
 - C# 侧通过 internal call 调 joy 的 C API，天然与引擎逻辑同进程、零 IPC。
 - 帧回调走 `csx_find_method` 缓存的方法句柄，不做每帧反射查找。
 
@@ -74,9 +75,42 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 |---|---|
 | joy 引擎 | 仓内 **git 子模块** `third_party/joy`（`git submodule update --init`） |
 | C# 绑定模块 | 同一子模块里的 `modules/csharp`，由 `MODULES csharp` 启用；本仓不含副本 |
-| Mono 开发包 | `MONO_INCLUDE_DIR` / `MONO_LIBRARIES` / 运行期 `mono-2.0-sgen.dll` |
-| .NET SDK 8 | 编译 `JoyGame.dll`（目标框架 netstandard2.0，供 Mono 加载） |
+| C# 运行时 | joy 子项目 `third_party/joy/modules/csharp/runtime/windows.x64.Release/`：`coreclr.dll` + `include/mono-2.0/` + `libs/`（.NET 8 BCL），无需安装 Mono |
+| .NET SDK 8 | 编译 `JoyGame.dll`（目标框架 netstandard2.0，由 CoreCLR 加载） |
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
+
+`coreclr.dll` 是 `dotnet/runtime` 的自定义构建（CoreCLR + 静态链接 Mono 运行时组件），
+同时导出 `coreclr_*` 与 `mono_*` 两套宿主 API，因此 `joy_csharp.c` / `csclib` 的
+`csx_*` 嵌入代码无需改写。CMake 的 `JOY_CLR_ROOT` 默认从 `JOY_SOURCE_DIR` 解析到
+`modules/csharp/runtime/windows.x64.Release`，post-build 会把 `coreclr.dll` 和
+`libs/`（拷成 exe 旁的 `lib/`）放进输出目录，`main.c` 在 `csx_create()` 前用
+`MONO_LIB_DIR` 把 BCL 目录指过去。换成另一套同布局的构建（含
+`coreclr.import.lib` / `include/mono-2.0` / `libs`）用 `-DJOY_CLR_ROOT=<目录>`；
+换回系统 Mono 则需同时改 CMake 的运行时段与 post-build 拷贝。post-build 会先清空
+输出目录的 `lib/` 再拷贝，避免裁剪后残留旧程序集。
+
+`libs/` 只保留 **12 个文件 / 约 4.74 MB** 的语言与数据结构核心：
+`System.Private.CoreLib.dll`（基础类型、`List<T>`、`Dictionary<,>`、委托、字符串，
+占绝大部分体积），`netstandard.dll` / `mscorlib.dll` / `System.dll` / `System.Core.dll`
+（兼容 facade），`System.Collections.dll`，`System.Runtime.dll` /
+`System.Runtime.Extensions.dll` / `System.Runtime.InteropServices.dll` /
+`System.Runtime.CompilerServices.Unsafe.dll`（类型转发与 internal call 所需），
+`System.AppContext.dll`、`Microsoft.NETCore.App.runtimeconfig.json`。
+网络（`System.Net.*`）、线程 / Task、IO / Console、反射、Globalization、正则、
+Linq、Xml / Json、数据、序列化、加密、VB / C# 动态等全部移除；
+`Microsoft.NETCore.App.deps.json` 也已移除（实测运行时不依赖）。
+
+因此 C# 业务侧只能用最基础的语法与集合类型，`Console` / `File` / LINQ /
+`Task` / `Thread` 等不可用，需要的能力由业务侧自行封装；也可把对应程序集从
+`build/clr-trim-backup/`（本地备份，未纳入 git）放回 `libs/`，再重新
+`cmake --build` 即可。
+
+该目录位于 **git 子模块** `third_party/joy` 内：运行时文件属于 joy 仓库，主仓只通过
+gitlink 记录 joy 的提交号。因此它们必须在 joy 仓库提交并推送、主仓随后更新 gitlink，
+`git clone --recursive` 才能拿到；只提交主仓不会带走这些文件。
+
+注意：这不是微软官方分发包（版本 .NET 8.0.17，且 .NET 8 支持已于 2026-11-10 结束），
+没有官方补丁渠道，升级需要从 `dotnet/runtime` 自行重建这套二进制。
 
 ## 获取代码
 
@@ -95,7 +129,7 @@ git submodule update --init --recursive
 # 1) C# 业务程序集
 dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
 
-# 2) C++ 宿主（CMake 会自动把 assets / JoyGame.dll / mono 运行时拷到输出目录）
+# 2) C 宿主（CMake 会自动把 assets / JoyGame.dll / coreclr.dll + BCL 拷到输出目录）
 cmake -S . -B build/app -A x64
 cmake --build build/app --config Release --parallel
 
@@ -129,6 +163,28 @@ $env:SDL_VIDEODRIVER="dummy"
 - 敌人 AI 确实在靠近玩家
 
 输出 `[smoke] PASS abi=True play=2 ...` 并退出；失败则 `[smoke] FAIL ...` 且退出码为 1。
+
+## 在 Visual Studio 中开发
+
+C 宿主由 CMake 构建，C# 业务是独立的 SDK 风格工程。根 `CMakeLists.txt` 用
+`include_external_msproject` 把 `csharp/JoyGame.csproj` 挂进 CMake 生成的 VS
+解决方案（仅 Visual Studio 生成器生效，其它生成器忽略），所以不需要再手写一个
+与 CMake 并列的 `.sln`：
+
+1. 先按「构建与运行」执行一次 `cmake -S . -B build/app -A x64`。
+2. 用 VS 打开 `build/app/joy_csharp_test_app.sln`，解决方案里同时有
+   `joy_csharp_test_app`（C 宿主）和 `JoyGame`（C# 工程），C# 侧有完整
+   IntelliSense，可直接编辑与生成。CMake 已把该工程映射到 `Any CPU` 平台，
+   并把 `MinSizeRel` / `RelWithDebInfo` 映射到 `Release`，无需再到
+   Configuration Manager 手动修复映射（手动改也会被下次 configure 覆盖）。
+3. 宿主运行加载的是 `build/csharp/JoyGame.dll`（CMake post-build 拷到 exe
+   目录）。VS 里生成 `JoyGame` 工程时，MSBuild 输出到
+   `csharp/bin/x64/<配置>/netstandard2.0/`，**不会**自动更新
+   `build/csharp/JoyGame.dll`；改完 C# 后请执行
+   `dotnet build csharp/JoyGame.csproj -c Release -o build/csharp`，再生成宿主。
+
+若用 VS 的「打开文件夹」以 CMake 工作区方式打开仓库根，只会加载 C/C++ 目标，
+C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`。
 
 ## 绑定体系
 
@@ -169,7 +225,7 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 `.github/workflows/windows-build.yml`（仅 Windows x64）：
 
 1. `checkout` 时递归拉取子模块（joy 提交号由 gitlink 固定，绑定模块随之就位）
-2. 装 .NET 8 + Mono
+2. 装 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
 3. `dotnet build` C# 业务（自动引用子模块的 `InternalCalls.cs`）
 4. CMake + MSVC 构建宿主（`MODULES csharp` 编入 joy 的绑定源码）
 5. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
