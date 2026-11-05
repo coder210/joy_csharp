@@ -10,10 +10,8 @@ joy 引擎的 **C# 脚本模板**：C 侧只留窗口 / 主循环 / 事件泵，
 main.c                    C 宿主：窗口 + 主循环 + SDL 事件泵；每帧回调 C# Host.OnFrame
 CMakeLists.txt            仓库根构建入口（MODULES csharp 接入 joy 绑定模块 + 拷贝运行期产物）
 
-csharp/                   C# 工程（程序集 JoyGame.dll，netstandard2.0）
-  JoyGame.csproj          引用 joy 子项目提供的 InternalCalls.cs
-  bindings/               Joy 命名空间的手写 internal call 声明（待上移 joy 子项目）
-    Native.cs             Joy.Draw / Joy.Input / Joy.Host
+csharp/                   C# 业务工程（程序集 JoyGame.dll，netstandard2.0）
+  JoyGame.csproj          通过 ProjectReference 引用 joy 的 Joy.Bindings.csproj
   runtime/                模板运行时骨架
     Host.cs               C 宿主反射入口：OnInit / OnFrame / OnShutdown
     GameApp.cs / IScene.cs              应用外壳 / 场景接口
@@ -26,33 +24,44 @@ csharp/                   C# 工程（程序集 JoyGame.dll，netstandard2.0）
 
 assets/                   模板资源（玩家/敌人精灵、字体）
 third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
-  modules/csharp/         C# 绑定模块：Mono 宿主 joy_csharp.c/.h、csclib/、
-                          csharp/Joy/InternalCalls.cs、tools/gen_csclib.js、
-                          runtime/windows.x64.Release/（CoreCLR 运行时 + BCL）
+  modules/csharp/         C# 绑定模块
+    joy_csharp.c/.h       C 侧唯一对外入口（宿主只 include joy_csharp.h）
+    csclib/               手写 internal call 实现 + 自动生成的 wrapper
+    csharp/               C# 绑定工程
+      Joy.Bindings.csproj  产出 Joy.Bindings.dll（程序集引用，非源码链接）
+      Joy/InternalCalls.cs  自动生成的 public 声明
+      Joy/NativeCalls.cs    手写热点的 public 声明
+    tools/gen_csclib.js   绑定生成器
+    runtime/windows.x64.Release/  CoreCLR 运行时 + BCL
 ```
 
 ## 模块归属
 
-C# 绑定层（Mono 宿主、`csclib/`、自动生成的 `Joy.InternalCalls`）属于
-**joy 子项目** `third_party/joy/modules/csharp`，本仓不再持有副本：
+C# 绑定层（Mono 宿主、`csclib/`、自动生成的 `Joy.InternalCalls`、手写声明）全部属于
+**joy 子项目** `third_party/joy/modules/csharp`，本仓不再持有任何副本：
 
-- C 侧：`joy_add_sources(joy_csharp_test_app MODULES csharp)` 自动启用并链接
-  `joy_module_csharp`，同时把 `ENABLED_CSHARP_SCRIPT` 传给宿主编入的 joy 源码。
-- C# 侧：`JoyGame.csproj` 直接引用该模块的 `csharp/Joy/InternalCalls.cs`。
+- C 侧：`joy_add_sources(joy_csharp_test_app MODULES csharp)` 把 `joy/modules/csharp`
+  的源码直接编入宿主 target（不建库、不产 DLL），并定义 `ENABLED_CSHARP_SCRIPT`；
+  宿主只 `#include "joy_csharp.h"`，注册入口、输入桥、宿主状态全在该头文件。
+- C# 侧：joy 的 `csharp/Joy.Bindings.csproj` 单独编译成 `Joy.Bindings.dll`，
+  `JoyGame.csproj` 通过 `ProjectReference` 引用它。所有 `Joy.*` 声明都在 joy，
+  且必须是 `public` 才能跨程序集可见；本仓只保留玩法与运行时骨架。
 
 `JoyGame.csproj` 按职责显式分组，不再用一个 `game\**\*.cs` 一把梭：
 
 | 目录 | 内容 | 归属 |
 |---|---|---|
-| `csharp/bindings/` | `namespace Joy` 的手写 internal call 声明 | 应属 joy，暂隔离待上移 |
 | `csharp/runtime/` | `Host` / `GameApp` / `IScene` 及 `Joy.*` 门面 | 本仓模板骨架 |
 | `csharp/game/` | 场景、玩家、敌人、子弹 | 本仓示例玩法 |
 | `csharp/test/` | `SmokeScript` | 本仓测试脚本 |
 
-`bindings/Native.cs` 是唯一仍留在本仓的 `Joy` 命名空间文件：joy 子项目只提供
-自动生成的 `InternalCalls.cs`，没有 `Joy.Draw/Input/Host` 的手写声明。直接改动
-git 子模块不会随本仓提交（主仓只记录 gitlink），他人 clone 后会编译失败，因此
-先隔离存放；待 joy 侧补齐后改为引用并删除本仓副本。
+`JoyGame.csproj` 用 `$(JoyCSharpDir)` 定位 joy 的绑定工程（默认
+`../third_party/joy/modules/csharp/csharp`），换用另一份 joy 源码树时可覆盖该属性。
+
+运行时约束：`Joy.Bindings.dll` 必须部署到 CLR 搜索路径 `lib/`（宿主用
+`mono_set_dirs` 指定，依赖程序集只从那里解析），只放在 exe 旁会加载失败，
+`MONO_PATH` 对这套自定义运行时也无效。CMake 的 post-build 会在「清空并复制
+BCL 到 `lib/`」**之后**把绑定 DLL 追加进去，顺序不能颠倒。
 
 ## 运行时架构
 
@@ -68,15 +77,17 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 - C 侧不写任何玩法代码，只负责"帧边界 + 事件泵 + CLR 生命周期"。
 - C# 侧通过 internal call 调 joy 的 C API，天然与引擎逻辑同进程、零 IPC。
 - 帧回调走 `csx_find_method` 缓存的方法句柄，不做每帧反射查找。
+- `csx_register_internal_call("Joy.X::Y", ...)` 按托管类型全名匹配，不关心声明
+  位于哪个程序集，因此绑定声明拆到 `Joy.Bindings.dll` 后注册代码无需改动。
 
 ## 依赖
 
 | 依赖 | 说明 |
 |---|---|
 | joy 引擎 | 仓内 **git 子模块** `third_party/joy`（`git submodule update --init`） |
-| C# 绑定模块 | 同一子模块里的 `modules/csharp`，由 `MODULES csharp` 启用；本仓不含副本 |
+| C# 绑定模块 | 同一子模块里的 `modules/csharp`，由 `MODULES csharp` 启用；C 侧源码编入宿主，C# 侧由 `Joy.Bindings.csproj` 产出独立程序集，本仓不含副本 |
 | C# 运行时 | joy 子项目 `third_party/joy/modules/csharp/runtime/windows.x64.Release/`：`coreclr.dll` + `include/mono-2.0/` + `libs/`（.NET 8 BCL），无需安装 Mono |
-| .NET SDK 8 | 编译 `JoyGame.dll`（目标框架 netstandard2.0，由 CoreCLR 加载） |
+| .NET SDK 8 | 编译 `Joy.Bindings.dll` 与 `JoyGame.dll`（目标框架 netstandard2.0，由 CoreCLR 加载） |
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
 
 `coreclr.dll` 是 `dotnet/runtime` 的自定义构建（CoreCLR + 静态链接 Mono 运行时组件），
@@ -87,7 +98,8 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 `MONO_LIB_DIR` 把 BCL 目录指过去。换成另一套同布局的构建（含
 `coreclr.import.lib` / `include/mono-2.0` / `libs`）用 `-DJOY_CLR_ROOT=<目录>`；
 换回系统 Mono 则需同时改 CMake 的运行时段与 post-build 拷贝。post-build 会先清空
-输出目录的 `lib/` 再拷贝，避免裁剪后残留旧程序集。
+输出目录的 `lib/` 再拷贝 BCL，避免裁剪后残留旧程序集，**最后**追加
+`Joy.Bindings.dll`；这个顺序不能颠倒，否则绑定 DLL 会被清空步骤删掉。
 
 `libs/` 只保留 **4 个文件 / 约 4.5 MB** 的语言与数据结构核心：
 `System.Private.CoreLib.dll`（基础类型、`List<T>`、`Dictionary<,>`、委托、字符串，
@@ -131,16 +143,23 @@ git submodule update --init --recursive
 ## 构建与运行（Windows）
 
 ```powershell
-# 1) C# 业务程序集
+# 1) joy 的绑定程序集 + 本仓业务程序集（都输出到 build/csharp）
+dotnet build third_party/joy/modules/csharp/csharp/Joy.Bindings.csproj -c Release -o build/csharp
 dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
 
-# 2) C 宿主（CMake 会自动把 assets / JoyGame.dll / coreclr.dll + BCL 拷到输出目录）
+# 2) C 宿主（CMake 自动把 assets / JoyGame.dll / coreclr.dll + BCL 拷到输出目录，
+#    并把 Joy.Bindings.dll 追加到 lib/）
 cmake -S . -B build/app -A x64
 cmake --build build/app --config Release --parallel
 
 # 3) 运行（也可先 cd 到 build/app/bin/Release）
 .\build\app\bin\Release\joy_csharp_test_app.exe
 ```
+
+第二条 `dotnet build` 也会通过 `ProjectReference` 连带构建绑定项目；显式跑第一条
+是为了确保 `Joy.Bindings.dll` 一定落在 `build/csharp/`，供 CMake post-build 取用
+（`JOY_BINDINGS_DLL` 的默认值就指向这里）。改完 joy 侧的绑定声明后，两条都要重跑，
+再生成宿主以刷新 `lib/` 里的 DLL。
 
 操作：`WASD` 移动 · `Space` 或鼠标左键射击 · `Esc` 返回菜单 / 退出。
 
@@ -182,11 +201,11 @@ C 宿主由 CMake 构建，C# 业务是独立的 SDK 风格工程。根 `CMakeLi
    IntelliSense，可直接编辑与生成。CMake 已把该工程映射到 `Any CPU` 平台，
    并把 `MinSizeRel` / `RelWithDebInfo` 映射到 `Release`，无需再到
    Configuration Manager 手动修复映射（手动改也会被下次 configure 覆盖）。
-3. 宿主运行加载的是 `build/csharp/JoyGame.dll`（CMake post-build 拷到 exe
-   目录）。VS 里生成 `JoyGame` 工程时，MSBuild 输出到
-   `csharp/bin/x64/<配置>/netstandard2.0/`，**不会**自动更新
-   `build/csharp/JoyGame.dll`；改完 C# 后请执行
-   `dotnet build csharp/JoyGame.csproj -c Release -o build/csharp`，再生成宿主。
+3. 宿主运行加载的是 `build/csharp/JoyGame.dll`（拷到 exe 目录），
+   `Joy.Bindings.dll` 则拷进 `lib/`。VS 里生成 `JoyGame` 工程时，MSBuild 输出到
+   `csharp/bin/x64/<配置>/netstandard2.0/`，**不会**自动更新 `build/csharp/`；
+   改完 C# 后请执行「构建与运行」里的两条 `dotnet build ... -o build/csharp`，
+   再生成宿主。
 
 若用 VS 的「打开文件夹」以 CMake 工作区方式打开仓库根，只会加载 C/C++ 目标，
 C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`。
@@ -197,10 +216,14 @@ C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`�
 
 | 层 | 内容 | 维护位置 |
 |---|---|---|
-| 自动生成 | 603 个 joy C API（标量 / 字符串 / 不透明指针 / ≤16 字节小结构体按值） | `tools/gen_csclib.js` → `csclib/generated/`、`csharp/Joy/InternalCalls.cs`（相对 `modules/csharp/`） |
-| 手写热点 | `Joy.Draw`（图片、矩形、线、文字、贴图尺寸）、`Joy.Input`、`Joy.Host` | `modules/csharp/csclib/draw.c`、`input.c`、`host.c` |
-| 手写 POC | `utils_*` 等早期接口 | `modules/csharp/csclib/utils.c` |
-| C# 业务侧声明 | 上述手写热点的 internal call 声明 | 本仓 `csharp/bindings/Native.cs`（待上移 joy） |
+| 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `tools/gen_csclib.js` 的 `ALLOW_NAMES` → `csclib/generated/`、`csharp/Joy/InternalCalls.cs`（相对 `modules/csharp/`） |
+| 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`csclib/draw.c`、`input.c`、`host.c`；C# 声明：`csharp/Joy/NativeCalls.cs` |
+| C# 程序集 | 上述两类 `public` 声明统一编入 `Joy.Bindings.dll` | `csharp/Joy.Bindings.csproj` |
+
+模块只暴露业务实际调用的 internal call。生成层由 `ALLOW_NAMES` 白名单控制，
+未登记的 joy.h API 不会透给 C#；所有 wrapper 只调用 `joy.h` 声明的函数与 C
+标准库，不直接访问 `SDL_*` / `ikcp_*` / mongoose / spine 等第三方接口。早期的
+SDL / KCP / socket / mathx / collision / utils 绑定文件已删除。
 
 重新生成（改动落在 joy 子项目里，需在 joy 仓库提交后更新本仓 gitlink）：
 
@@ -210,10 +233,14 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 # 默认解析 joy 源码树自身；也可用 --joy <目录> 或环境变量 JOY_DIR 覆盖
 ```
 
+生成后重跑「构建与运行」的两条 `dotnet build`，再 `cmake --build` 刷新 `lib/`。
+
 生成器规则：
 
+- 白名单：`ALLOW_NAMES` 只登记业务需要的 joy.h API，新增 C# 接口须先在此登记
+- `public`：生成的类都是 `public static class`，因为声明编入独立的 `Joy.Bindings.dll`，业务程序集要跨程序集访问
 - 标量 → 同名 C# 类型；`const char*` 入参 → `string`；`*_p` / `void*` → `IntPtr`
-- **小结构体**（字段全标量、总大小 ≤ 16 字节，如 `vec2_t` / `jrect_t` / `jcolor_t`）→ C# `[StructLayout(Sequential)]` 结构体，按值传参
+- **小结构体**（字段全标量、总大小 ≤ 16 字节，如 `vec2_t` / `jrect_t`）→ C# `[StructLayout(Sequential)]` 结构体，按值传参；`EXTRA_STRUCTS` 强制输出手写 ABI 自检所需的结构体
 - 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `modules/csharp/csclib/draw.c` 的扁平包装覆盖
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
@@ -222,7 +249,7 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 
 - **加一个场景**：实现 `runtime/IScene.cs` 的 `IScene`（`Enter/Update/Render`），在 `game/` 下新建场景并用 `app.ChangeScene(...)` 切换。
 - **加一种敌人**：复制 `game/Enemy.cs` 的字段，在 `game/PlayScene.cs` 的 `UpdateSpawn` 里决定生成规则，`Render` 里选精灵。
-- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/csclib/draw.c` 加扁平包装 + 本仓 `bindings/Native.cs` 声明 + 注册一行。
+- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/csclib/draw.c` 加扁平包装 + `csharp/Joy/NativeCalls.cs` 的 `public` 声明 + 注册一行，然后重新生成 / 构建。
 - **加输入**：joy 子项目 `modules/csharp/csclib/input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `runtime/Keys.cs` 的常量或数字。
 
 ## CI
@@ -231,10 +258,10 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 
 1. `checkout` 时递归拉取子模块（joy 提交号由 gitlink 固定，绑定模块随之就位）
 2. 装 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
-3. `dotnet build` C# 业务（自动引用子模块的 `InternalCalls.cs`）
-4. CMake + MSVC 构建宿主（`MODULES csharp` 编入 joy 的绑定源码）
+3. `dotnet build` 依次构建 joy 的 `Joy.Bindings.csproj` 与本仓 `JoyGame.csproj`，都输出到 `build/csharp`
+4. CMake + MSVC 构建宿主（`MODULES csharp` 编入 joy 的绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
 5. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
-6. 上传 exe + dll + assets 产物
+6. 上传 exe + dll + `lib/**` + assets 产物
 
 ## License
 

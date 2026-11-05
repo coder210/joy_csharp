@@ -13,10 +13,9 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <joy/joy.h>
-/* C# 绑定头文件由 joy 子项目的 modules/csharp 提供（MODULES csharp
- * 会把该目录加入 include 路径），本仓不再自带绑定层源码。 */
+/* C# 后端只通过 joy_csharp.h 交互：MODULES csharp 把 joy/modules/csharp
+ * 的源码直接编入本 target，本仓不自带绑定层源码。 */
 #include "joy_csharp.h"
-#include "csclib.h"
 
 #include <stdio.h>
 #include <stdlib.h>

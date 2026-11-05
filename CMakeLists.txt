@@ -56,6 +56,10 @@ set(JOY_CLR_LIB_DIR  "${_clr_root}/libs")
 # ---- C# 业务程序集 ---------------------------------------------------------
 set(JOY_GAME_DLL "${CMAKE_CURRENT_SOURCE_DIR}/build/csharp/JoyGame.dll"
     CACHE FILEPATH "JoyGame.dll（dotnet build -o build/csharp 的产物）")
+# joy 的绑定程序集：JoyGame.csproj 通过 ProjectReference 引用它，
+# dotnet build -o build/csharp 会把两个 DLL 一起放进该目录。
+set(JOY_BINDINGS_DLL "${CMAKE_CURRENT_SOURCE_DIR}/build/csharp/Joy.Bindings.dll"
+    CACHE FILEPATH "Joy.Bindings.dll（joy 子项目 Joy.Bindings.csproj 的产物）")
 
 # ---- joy 依赖的第三方工程 ---------------------------------------------------
 add_subdirectory("${JOY_SOURCE_DIR}/msgpack" "${CMAKE_BINARY_DIR}/msgpack")
@@ -64,8 +68,8 @@ add_subdirectory("${JOY_SOURCE_DIR}/SDL"     "${CMAKE_BINARY_DIR}/SDL")
 include("${JOY_SOURCE_DIR}/joy_add.cmake")
 
 # ---- 宿主可执行文件 --------------------------------------------------------
-# C# 绑定层由 joy 子项目提供：MODULES csharp 会自动 add_subdirectory
-# third_party/joy/modules/csharp 并链接 joy_module_csharp（OBJECT 库）。
+# C# 绑定层由 joy 子项目提供：MODULES csharp 会把 joy/modules/csharp 的源码
+# 直接编入本 target（不建库、不产 DLL），对外只暴露 joy_csharp.h。
 add_executable(joy_csharp_test_app main.c)
 joy_add_sources(joy_csharp_test_app MODULES csharp)
 
@@ -117,6 +121,21 @@ if(EXISTS "${JOY_CLR_LIB_DIR}")
         COMMENT "Copying .NET BCL (lib/)")
 else()
     message(WARNING "未找到 BCL 目录 ${JOY_CLR_LIB_DIR}：运行时需要 lib/ 与 exe 同目录")
+endif()
+
+# JoyGame.dll 通过 ProjectReference 依赖 Joy.Bindings.dll，而这套自定义运行时
+# 只从 mono_set_dirs 指定的 lib/ 解析依赖程序集（放 exe 旁无效，MONO_PATH 也无效）。
+# 因此绑定 DLL 必须落进 lib/，且拷贝必须排在上面「清空 lib/ + 复制 BCL」之后；
+# 同一 target 的 POST_BUILD 命令按添加顺序执行。
+if(EXISTS "${JOY_BINDINGS_DLL}")
+    add_custom_command(TARGET joy_csharp_test_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${JOY_BINDINGS_DLL}" "${_app_out}/lib/Joy.Bindings.dll"
+        COMMENT "Copying Joy.Bindings.dll into CLR lib/")
+else()
+    message(WARNING
+        "未找到 Joy.Bindings.dll（${JOY_BINDINGS_DLL}）：JoyGame.dll 依赖它，先执行 "
+        "dotnet build third_party/joy/modules/csharp/csharp/Joy.Bindings.csproj -c Release -o build/csharp")
 endif()
 
 # ---- 冒烟测试 --------------------------------------------------------------
