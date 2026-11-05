@@ -9,9 +9,15 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 自动生成的绑定声明（勿手改） -->
-    <Compile Include="Joy\InternalCalls.cs" Link="Joy\InternalCalls.cs" />
-    <!-- 手写绑定声明 + 游戏业务 -->
+    <!-- 自动生成的绑定声明（勿手改）：由 joy 子项目 modules/csharp 提供，本仓只引用 -->
+    <Compile Include="../third_party/joy/modules/csharp/csharp/Joy/InternalCalls.cs" Link="Joy/InternalCalls.cs" />
+    <!-- 手写 internal call 声明：joy 子项目暂未提供，本仓隔离存放，待上移 -->
+    <Compile Include="bindings\**\*.cs" />
+    <!-- 模板运行时骨架 -->
+    <Compile Include="runtime\**\*.cs" />
+    <!-- 示例玩法 -->
     <Compile Include="game\**\*.cs" />
+    <!-- 无窗口冒烟脚本 -->
+    <Compile Include="test\**\*.cs" />
   </ItemGroup>
 </Project>

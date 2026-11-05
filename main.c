@@ -1,5 +1,5 @@
 /* ============================================================
- * joy_csharp 宿主：C 侧只负责窗口 / 主循环 / 事件泵 / 渲染帧边界，
+ * joy_csharp_test 宿主：C 侧只负责窗口 / 主循环 / 事件泵 / 渲染帧边界，
  * 业务逻辑全部在 C#（JoyGame.dll）。
  *
  * 每帧：r2d_begin → C# Host.OnFrame(dt) → r2d_end
@@ -13,10 +13,10 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <joy/joy.h>
-/* 用相对路径包含本仓头文件：joy 源码树自带的 modules/csharp 也存在同名
- * joy_csharp.h（旧版），靠 include 顺序解析容易拿到错的那个。 */
-#include "../joy_csharp.h"
-#include "../csclib/csclib.h"
+/* C# 绑定头文件由 joy 子项目的 modules/csharp 提供（MODULES csharp
+ * 会把该目录加入 include 路径），本仓不再自带绑定层源码。 */
+#include "joy_csharp.h"
+#include "csclib.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,9 +1,14 @@
 using System;
 using System.Runtime.CompilerServices;
 
-// 手写的 C# → C internal call 声明（对应的 C 实现在 csclib/draw.c、input.c、host.c）。
-// 这些 API 用标量参数，避免跨 ABI 传递结构体；结构体版本的 API 由自动生成的
-// InternalCalls.cs 提供。
+// 手写的 C# → C internal call 声明；对应的 C 实现位于 joy 子项目
+// third_party/joy/modules/csharp/csclib/draw.c、input.c、host.c。
+// 这些 API 用标量参数，避免跨 ABI 传递结构体；结构体版本的 API 由 joy 子项目
+// 自动生成的 csharp/Joy/InternalCalls.cs 提供。
+//
+// 归属说明：本文件属于 joy 的 C# 绑定层，但 joy 子项目目前只提供自动生成的
+// InternalCalls.cs，没有这些手写热点的声明，故暂放在本仓 bindings/ 隔离。
+// 待 joy 侧补齐后应改为引用其文件并删除本文件（见 README「模块归属」）。
 namespace Joy
 {
     internal static class Draw

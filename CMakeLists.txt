@@ -1,32 +1,24 @@
 # ============================================================
-# joy_csharp —— joy 的可选 C#(Mono) 脚本后端
+# C# 业务模板的 C++ 宿主（Windows / MSVC），仓库根即构建入口
 #
-# 依赖：
-#   joy 源码树（其下有 joy.h）  默认用仓内子模块 third_party/joy，
-#                              换源时才需 -DJOY_SOURCE_DIR=<含 joy.h 的目录>
-#   Mono 开发包                -DMONO_INCLUDE_DIR=... -DMONO_LIBRARIES=...
+# 结构：
+#   main.c                        创建窗口 + 主循环 + 事件泵，每帧回调 C# Host.OnFrame
+#   third_party/joy/modules/csharp   joy 子项目提供的 C# 绑定模块（MODULES csharp）
+#   csharp/                       C# 业务程序集 JoyGame.dll（dotnet build 产出）
 #
-# 用法：
-#   git submodule update --init --recursive
-#   单独构建：cmake -S . -B build ...
-#   上层工程：add_subdirectory(joy_csharp) 后 target_link_libraries(<t> PRIVATE joy_csharp)
-#
-# 未启用本模块时 joy 核心不需要 Mono，也不依赖本仓。
+# 用法（在仓库根目录，joy 默认取仓内子模块 third_party/joy）：
+#   cmake -S . -B build/app -A x64 \
+#         -DMONO_INCLUDE_DIR=... -DMONO_LIBRARIES=...
+#   cmake --build build/app --config Release
 # ============================================================
 cmake_minimum_required(VERSION 3.16)
+project(joy_csharp_test_app C CXX)
 
-# 作为仓库根 CMakeLists 使用时自带 project()；被上层 add_subdirectory 时跳过。
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    project(joy_csharp C)
-endif()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-if(TARGET joy_csharp)
-    return()
-endif()
-
-# ---- joy 源码树定位 ---------------------------------------------------------
+# ---- joy 源码树（其下有 joy.h）---------------------------------------------
 # 默认用仓内子模块 third_party/joy（git submodule update --init），
-# 其次找同级 joy/ 或 joy_topdown_template/third_party/joy。
+# 也兼容与 joy 源码树同级、或从别的工程里复用 joy 的场景。
 set(JOY_SOURCE_DIR "" CACHE PATH "joy 源码目录（其下须有 joy.h）")
 if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
     foreach(_joy_cand
@@ -41,55 +33,62 @@ if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
 endif()
 if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
     message(FATAL_ERROR
-        "joy_csharp: 找不到 joy 源码树，请设置 -DJOY_SOURCE_DIR=<含 joy.h 的目录>")
+        "joy_csharp_test_app: 找不到 joy 源码树，请设置 -DJOY_SOURCE_DIR=<含 joy.h 的目录>")
 endif()
 
 # ---- Mono 开发包 -----------------------------------------------------------
-set(MONO_INCLUDE_DIR "" CACHE PATH "Mono 头文件目录（mono/metadata/*.h 所在目录）")
-set(MONO_LIBRARIES "" CACHE FILEPATH "Mono 库（如 mono-2.0-sgen.lib）")
-if(NOT MONO_INCLUDE_DIR OR NOT MONO_LIBRARIES)
-    message(FATAL_ERROR
-        "joy_csharp: 本模块需要 Mono 开发包，请设置 -DMONO_INCLUDE_DIR 与 -DMONO_LIBRARIES")
+set(MONO_INCLUDE_DIR "C:/Program Files/Mono/include/mono-2.0" CACHE PATH "Mono include")
+set(MONO_LIBRARIES   "C:/Program Files/Mono/lib/mono-2.0-sgen.lib" CACHE FILEPATH "Mono lib")
+# 运行期需要把 mono 运行时 DLL 放到 exe 旁边
+set(MONO_RUNTIME_DLL "C:/Program Files/Mono/bin/mono-2.0-sgen.dll" CACHE FILEPATH "Mono runtime DLL")
+
+# ---- C# 业务程序集 ---------------------------------------------------------
+set(JOY_GAME_DLL "${CMAKE_CURRENT_SOURCE_DIR}/build/csharp/JoyGame.dll"
+    CACHE FILEPATH "JoyGame.dll（dotnet build -o build/csharp 的产物）")
+
+# ---- joy 依赖的第三方工程 ---------------------------------------------------
+add_subdirectory("${JOY_SOURCE_DIR}/msgpack" "${CMAKE_BINARY_DIR}/msgpack")
+add_subdirectory("${JOY_SOURCE_DIR}/spine"   "${CMAKE_BINARY_DIR}/spine")
+add_subdirectory("${JOY_SOURCE_DIR}/SDL"     "${CMAKE_BINARY_DIR}/SDL")
+include("${JOY_SOURCE_DIR}/joy_add.cmake")
+
+# ---- 宿主可执行文件 --------------------------------------------------------
+# C# 绑定层由 joy 子项目提供：MODULES csharp 会自动 add_subdirectory
+# third_party/joy/modules/csharp 并链接 joy_module_csharp（OBJECT 库）。
+add_executable(joy_csharp_test_app main.c)
+joy_add_sources(joy_csharp_test_app MODULES csharp)
+
+# ---- 运行期产物：assets/ + JoyGame.dll + mono 运行时 ------------------------
+set(_app_out "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>")
+
+add_custom_command(TARGET joy_csharp_test_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${_app_out}/assets"
+    COMMENT "Copying assets")
+
+if(EXISTS "${JOY_GAME_DLL}")
+    add_custom_command(TARGET joy_csharp_test_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${JOY_GAME_DLL}" "${_app_out}/JoyGame.dll"
+        COMMENT "Copying JoyGame.dll")
+else()
+    message(WARNING
+        "未找到 JoyGame.dll（${JOY_GAME_DLL}）：先执行 "
+        "dotnet build csharp/JoyGame.csproj -c Release -o build/csharp")
 endif()
 
-# ---- 模块本体 --------------------------------------------------------------
-file(GLOB JOY_CS_CLIB CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/csclib/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/csclib/generated/*.c")
-
-add_library(joy_csharp STATIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/joy_csharp.c"
-    ${JOY_CS_CLIB})
-
-target_include_directories(joy_csharp PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/csclib"
-    "${CMAKE_CURRENT_SOURCE_DIR}/csclib/generated")
-# 使 #include <joy/joy.h> 成立（joy 源码位于 <根>/joy/，根为其父目录）
-target_include_directories(joy_csharp PRIVATE
-    "${JOY_SOURCE_DIR}/.."
-    "${MONO_INCLUDE_DIR}")
-
-# 开关宏以 PUBLIC 传递：宿主侧 joy_script_stub.c 据此关闭桩实现
-target_compile_definitions(joy_csharp PUBLIC ENABLED_CSHARP_SCRIPT JOY_STATIC)
-target_link_libraries(joy_csharp PUBLIC ${MONO_LIBRARIES})
-
-# joy.h 会 #include <SDL3/SDL_events.h>：上层已建 SDL3 目标时借用，
-# 独立构建时退回 joy 源码树内自带的 SDL 头文件目录。
-if(TARGET SDL3::SDL3)
-    target_link_libraries(joy_csharp PUBLIC SDL3::SDL3)
-elseif(EXISTS "${JOY_SOURCE_DIR}/SDL/include")
-    target_include_directories(joy_csharp PUBLIC "${JOY_SOURCE_DIR}/SDL/include")
+if(EXISTS "${MONO_RUNTIME_DLL}")
+    add_custom_command(TARGET joy_csharp_test_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MONO_RUNTIME_DLL}" "${_app_out}/mono-2.0-sgen.dll"
+        COMMENT "Copying mono runtime")
+else()
+    message(WARNING "未找到 Mono 运行时 ${MONO_RUNTIME_DLL}：运行时需要 mono-2.0-sgen.dll 与 exe 同目录")
 endif()
 
-set_target_properties(joy_csharp PROPERTIES
-    C_STANDARD 99
-    C_STANDARD_REQUIRED ON)
-
-if(MSVC)
-    # 源码为 UTF-8 无 BOM（含中文注释），避免 C4819；/wd4206 兼容全注释翻译单元
-    target_compile_options(joy_csharp PRIVATE /utf-8 /wd4206)
+# ---- 冒烟测试 --------------------------------------------------------------
+enable_testing()
+if(EXISTS "${JOY_GAME_DLL}")
+    add_test(NAME joy_csharp_test_smoke COMMAND joy_csharp_test_app --smoke 180)
+    set_tests_properties(joy_csharp_test_smoke PROPERTIES
+        WORKING_DIRECTORY "${_app_out}"
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 endif()
-
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/joy_csharp.c" ${JOY_CS_CLIB})

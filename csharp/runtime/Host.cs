@@ -4,7 +4,7 @@ namespace JoyGame
 {
     /// <summary>
     /// C 宿主反射调用的入口：OnInit / OnFrame / OnShutdown。
-    /// 名字与参数个数必须和 host/main.c 里的 csx_find_method 一致。
+    /// 名字与参数个数必须和仓库根 main.c 里的 csx_find_method 一致。
     /// </summary>
     public static class Host
     {

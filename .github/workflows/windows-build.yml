@@ -43,7 +43,7 @@ jobs:
 
       - name: Configure CMake
         run: >
-          cmake -S app -B build/app -A x64
+          cmake -S . -B build/app -A x64
           -DMONO_INCLUDE_DIR="C:/Program Files/Mono/include/mono-2.0"
           -DMONO_LIBRARIES="C:/Program Files/Mono/lib/mono-2.0-sgen.lib"
           -DMONO_RUNTIME_DLL="C:/Program Files/Mono/bin/mono-2.0-sgen.dll"
@@ -56,7 +56,7 @@ jobs:
         env:
           SDL_VIDEODRIVER: dummy
         run: |
-          $exe = "build/app/bin/Release/joy_csharp_app.exe"
+          $exe = "build/app/bin/Release/joy_csharp_test_app.exe"
           if (-not (Test-Path $exe)) { Write-Error "缺少 $exe"; exit 1 }
           $out = & $exe --smoke 180 2>&1
           $code = $LASTEXITCODE
@@ -68,10 +68,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: joy_csharp-windows-x64
+          name: joy_csharp_test-windows-x64
           if-no-files-found: error
           path: |
-            build/app/bin/Release/joy_csharp_app.exe
+            build/app/bin/Release/joy_csharp_test_app.exe
             build/app/bin/Release/JoyGame.dll
             build/app/bin/Release/mono-2.0-sgen.dll
             build/app/bin/Release/SDL3.dll
