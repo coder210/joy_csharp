@@ -15,6 +15,7 @@ namespace JoyGame
         {
             _app = new GameApp(r2d, width, height, smokeFrames);
             _smoke = smokeFrames > 0 ? new SmokeScript() : null;
+            if (smokeFrames > 0) ApiBindingSmoke.Run();
             _app.Start();
             Joy.Host.log("[host] init " + width + "x" + height +
                          (smokeFrames > 0 ? " smoke=" + smokeFrames : ""));

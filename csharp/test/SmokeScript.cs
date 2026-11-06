@@ -69,6 +69,7 @@ namespace JoyGame
 
             _done = true;
             bool ok = true;
+            ok &= ApiBindingSmoke.Passed; // IDL 新链路：强类型对象 + 自动释放
             ok &= _structAbiOk;         // 结构体按值传递的 ABI 正确
             ok &= _playCount >= 2;      // Menu→Play 与 GameOver→Play 都发生过
             ok &= _sawGameOver;
@@ -78,8 +79,9 @@ namespace JoyGame
             ok &= _enemyMoved;          // 敌人 AI 在追玩家
 
             string detail = string.Format(CultureInfo.InvariantCulture,
-                "abi={0} play={1} gameover={2} moved={3:0.0} fired={4} kills={5} enemies={6}",
-                _structAbiOk, _playCount, _sawGameOver, _maxMoved, _maxFired, _maxKills, _maxEnemies);
+                "api={0} abi={1} play={2} gameover={3} moved={4:0.0} fired={5} kills={6} enemies={7}",
+                ApiBindingSmoke.Passed, _structAbiOk, _playCount, _sawGameOver,
+                _maxMoved, _maxFired, _maxKills, _maxEnemies);
 
             if (ok)
             {

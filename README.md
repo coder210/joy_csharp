@@ -21,6 +21,7 @@ csharp/                   C# 业务工程（程序集 JoyGame.dll，netstandard2
     Player.cs / Enemy.cs / Bullet.cs
   test/
     SmokeScript.cs        无窗口冒烟脚本（模拟按键 + 断言）
+    ApiBindingSmoke.cs    P1 新绑定链路自检（强类型对象 + 自动释放）
 
 assets/                   模板资源（玩家/敌人精灵、字体）
 third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
@@ -199,13 +200,15 @@ $env:SDL_VIDEODRIVER="dummy"
 
 脚本模拟按键跑完 **Menu → Play → GameOver → 重开 Play**，断言：
 
+- IDL 新绑定链路：C# 调到共享 thunk、句柄是强类型对象、GC 后自动析构（`api=True`）
 - 结构体按值传递的 ABI 正确（`abi=True`）
 - 场景切换发生 2 次（菜单进游戏、死亡后重开）
 - 输入真的驱动了移动、射击
 - 子弹命中并击杀敌人
 - 敌人 AI 确实在靠近玩家
 
-输出 `[smoke] PASS abi=True play=2 ...` 并退出；失败则 `[smoke] FAIL ...` 且退出码为 1。
+输出 `[api] selftest PASS`、`[api.cs] PASS ...` 与
+`[smoke] PASS api=True abi=True play=2 ...` 并退出；失败则 `[smoke] FAIL ...` 且退出码为 1。
 
 ## 在 Visual Studio 中开发
 
@@ -262,9 +265,10 @@ ASCII 降级分支，以便将来换回非 CJK 字体时不会乱码。
 |---|---|---|
 | 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `modules/cs/gen_csclib.js` 的 `ALLOW_NAMES` → 生成 `bindings/csclib_generated.c` 与 `scripts/InternalCalls.cs` |
 | 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`modules/cs/bindings/csclib_{draw,input,host}.c`；C# 声明：`modules/cs/scripts/NativeCalls.cs` |
-| C# 程序集 | 上述两类 `public` 声明统一编入 `Joy.Bindings.dll` | `modules/cs/Joy.Bindings.csproj`（编译 `scripts/*.cs`） |
+| IDL 驱动（P1，并行） | `Joy.Api.Bindings` / `Diagnostics` / 强类型句柄对象，public API 无 `IntPtr` | `api/gen_bindings.js` → `bindings/api_generated.c` + `scripts/Api.generated.cs` |
+| C# 程序集 | 上述几类 `public` 声明统一编入 `Joy.Bindings.dll` | `modules/cs/Joy.Bindings.csproj`（显式列出 `scripts/*.cs`） |
 
-模块只暴露业务实际调用的 internal call。生成层由 `ALLOW_NAMES` 白名单控制，
+旧链路只暴露业务实际调用的 internal call，由 `ALLOW_NAMES` 白名单控制，
 未登记的 joy.h API 不会透给 C#；所有 wrapper 只调用 `joy.h` 声明的函数与 C
 标准库，不直接访问 `SDL_*` / `ikcp_*` / mongoose / spine 等第三方接口。早期的
 SDL / KCP / socket / mathx / collision / utils 绑定文件已删除。
@@ -289,24 +293,34 @@ node third_party/joy/modules/cs/gen_csclib.js
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
-## 绑定 API 契约（P0）
+## 绑定 API 契约（P0 / P1）
 
-joy 子项目的 `api/` 放一份与脚本语言无关的接口清单，供以后 Lua / JS / C# 三个后端
+joy 子项目的 `api/` 放一份与脚本语言无关的接口清单，让 Lua / JS / C# 三个后端
 共用同一套对象模型与所有权规则：
 
 ```powershell
+node third_party/joy/api/gen_bindings.js            # 重生成全部 4 个生成物
 node third_party/joy/api/gen_bindings.js --scan     # 从 joy.h 更新 joy.idl
 node third_party/joy/api/gen_bindings.js --check    # CI 校验，不写文件
 ```
 
-`joy.idl`（每条 API 一行、人工可改）与 `coverage.md`（生成物）都入库；`--scan`
-只刷新自动字段，保留 `status` / `owns` / `note`。**P0 只产出契约与报告，不生成
-任何会被调用的胶水代码**，现有 `modules/*/bindings/` 与宿主构建行为不变。
+`joy.idl`（每条 API 一行、人工可改）与 4 个生成物都入库；`--scan` 只刷新自动字段，
+保留 `status` / `owns` / `note`。默认 935 条全部 `status: off`，验证过一条才开放。
 字段含义、分级与三种常见操作见 [`third_party/joy/api/README.md`](third_party/joy/api/README.md)。
 
-P1 已落地共享 C 运行层（统一值容器、句柄表、自动析构）与 IDL 驱动的 thunk 生成器；
-首批只开放 4 条零副作用 API，宿主 `--smoke` 会打印 `[api] selftest PASS`。
-这套 API 目前只在 C 层自检可见，三个脚本后端尚未接入，业务代码与现有胶水未改动。
+P1 已落地共享 C 运行层（统一值容器、句柄表、自动析构）、IDL 驱动的 thunk 生成器，
+以及 **cs 后端薄适配**：
+
+```text
+Joy.Api.Bindings.*（强类型，无 IntPtr） → Joy.Api.Native.*（internal call）
+  → api_generated.c（Mono 值转 joy_value[]） → joy_api_call() → thunks_generated.c
+  → joy C API + joy_obj 句柄（finalizer 触发自动析构）
+```
+
+首批只开放 4 条零副作用 API。`csx_create()` 在旧注册入口后多调一次 `csopen_api()`，
+旧白名单胶水与 C# 业务调用点一行未改。`--smoke` 会打印 `[api] selftest PASS`
+（C 层）与 `[api.cs] PASS ... destroyed=1`（C# 层，计入 `[smoke] PASS` 断言）。
+Lua / JS 后端尚未接 `vm.c`，L2 / L3 / X 与 `jmath.h` 仍留待后续阶段。
 
 ## 扩展指引
 
@@ -321,10 +335,10 @@ P1 已落地共享 C 运行层（统一值容器、句柄表、自动析构）�
 
 1. `checkout` 时递归拉取子模块（joy 提交号由 gitlink 固定，绑定模块随之就位）
 2. 装 Node 20 与 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
-3. `node third_party/joy/api/gen_bindings.js --check` 校验绑定 API 契约与生成物同步（不写文件）
+3. `node third_party/joy/api/gen_bindings.js --check` 校验 IDL 与 4 个生成物同步（不写文件）
 4. `dotnet build` 依次构建 joy 的 `Joy.Bindings.csproj` 与本仓 `JoyGame.csproj`，都输出到 `build/csharp`
 5. CMake + MSVC 构建宿主（`MODULES cs` 编入 joy 的绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
-6. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
+6. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[api] selftest PASS`、`[api.cs] PASS`、`[smoke] PASS`）
 7. 上传 exe + dll + `lib/**` + assets 产物
 
 ## License

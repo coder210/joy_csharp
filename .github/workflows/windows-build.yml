@@ -68,6 +68,7 @@ jobs:
           $out | ForEach-Object { Write-Host $_ }
           $out | Out-File -FilePath smoke.log -Encoding utf8
           if ($code -ne 0) { Write-Error "冒烟失败，exit=$code"; exit $code }
+          if (-not ($out -match '\[api\.cs\] PASS')) { Write-Error "未看到 [api.cs] PASS"; exit 1 }
           if (-not ($out -match '\[smoke\] PASS')) { Write-Error "未看到 [smoke] PASS"; exit 1 }
 
       - name: Upload artifact

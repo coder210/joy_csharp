@@ -119,9 +119,12 @@ joy_add_sources(joy_csharp_test_app MODULES cs)
 # api/ 下的运行时与生成 thunk 与后端无关，先在主仓显式编入宿主做 C 层自检；
 # 等三个后端都接上后由 joy_add.cmake 统一装配。生成物 thunks_generated.c 入库，
 # 由 api/gen_bindings.js --check 保证与 joy.idl 同步。
+# cs 侧的 api_generated.c 位于 modules/cs/bindings/，已被该模块的 GLOB 自动收进
+# joy_module_cs，无需在这里重复添加；它调用的 joy_api_call() 由 joy_thunk.c 提供。
 target_sources(joy_csharp_test_app PRIVATE
     "${JOY_SOURCE_DIR}/api/runtime/joy_value.c"
     "${JOY_SOURCE_DIR}/api/runtime/joy_obj.c"
+    "${JOY_SOURCE_DIR}/api/runtime/joy_thunk.c"
     "${JOY_SOURCE_DIR}/api/thunks_generated.c")
 
 # ---- Visual Studio：把 C# 工程一并挂进生成的解决方案 -----------------------
