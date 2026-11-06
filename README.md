@@ -289,6 +289,21 @@ node third_party/joy/modules/cs/gen_csclib.js
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
+## 绑定 API 契约（P0）
+
+joy 子项目的 `api/` 放一份与脚本语言无关的接口清单，供以后 Lua / JS / C# 三个后端
+共用同一套对象模型与所有权规则：
+
+```powershell
+node third_party/joy/api/gen_bindings.js --scan     # 从 joy.h 更新 joy.idl
+node third_party/joy/api/gen_bindings.js --check    # CI 校验，不写文件
+```
+
+`joy.idl`（每条 API 一行、人工可改）与 `coverage.md`（生成物）都入库；`--scan`
+只刷新自动字段，保留 `status` / `owns` / `note`。**P0 只产出契约与报告，不生成
+任何会被调用的胶水代码**，现有 `modules/*/bindings/` 与宿主构建行为不变。
+字段含义、分级与三种常见操作见 [`third_party/joy/api/README.md`](third_party/joy/api/README.md)。
+
 ## 扩展指引
 
 - **加一个场景**：实现 `runtime/IScene.cs` 的 `IScene`（`Enter/Update/Render`），在 `game/` 下新建场景并用 `app.ChangeScene(...)` 切换。
@@ -301,11 +316,12 @@ node third_party/joy/modules/cs/gen_csclib.js
 `.github/workflows/windows-build.yml`（仅 Windows x64）：
 
 1. `checkout` 时递归拉取子模块（joy 提交号由 gitlink 固定，绑定模块随之就位）
-2. 装 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
-3. `dotnet build` 依次构建 joy 的 `Joy.Bindings.csproj` 与本仓 `JoyGame.csproj`，都输出到 `build/csharp`
-4. CMake + MSVC 构建宿主（`MODULES cs` 编入 joy 的绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
-5. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
-6. 上传 exe + dll + `lib/**` + assets 产物
+2. 装 Node 20 与 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
+3. `node third_party/joy/api/gen_bindings.js --check` 校验绑定 API 契约与生成物同步（不写文件）
+4. `dotnet build` 依次构建 joy 的 `Joy.Bindings.csproj` 与本仓 `JoyGame.csproj`，都输出到 `build/csharp`
+5. CMake + MSVC 构建宿主（`MODULES cs` 编入 joy 的绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
+6. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[smoke] PASS`）
+7. 上传 exe + dll + `lib/**` + assets 产物
 
 ## License
 
