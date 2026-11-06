@@ -43,10 +43,16 @@ namespace JoyGame
             Painter.Stroke(_app, cx - 150f, cy - 70f, 300f, 140f, 90, 60, 70);
 
             Painter.TextCenter(_app, "GAME OVER", cx, cy - 40f, big: true, r: 255, g: 120, b: 120);
-            Painter.TextCenter(_app, "击杀 " + _kills + " · 存活 " + _seconds.ToString("0.0") + "s",
-                               cx, cy - 6f, r: 230, g: 232, b: 240);
-            Painter.TextCenter(_app, "Enter 重来 · Esc 回菜单", cx, cy + 28f, r: 160, g: 168, b: 188);
-            Painter.TextCenter(_app, "场景：GameOver", cx, 18f, r: 90, g: 96, b: 112);
+            string secs = _seconds.ToString("0.0");
+            Painter.TextCenter(_app,
+                Texts.Pick(_app, "击杀 " + _kills + " · 存活 " + secs + "s",
+                                "Kills " + _kills + " | Time " + secs + "s"),
+                cx, cy - 6f, r: 230, g: 232, b: 240);
+            Painter.TextCenter(_app,
+                Texts.Pick(_app, "Enter 重来 · Esc 回菜单", "Enter retry | Esc menu"),
+                cx, cy + 28f, r: 160, g: 168, b: 188);
+            Painter.TextCenter(_app, Texts.Pick(_app, "场景：GameOver", "Scene: GameOver"),
+                               cx, 18f, r: 90, g: 96, b: 112);
         }
     }
 }

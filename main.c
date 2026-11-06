@@ -4,9 +4,12 @@
  *
  * 每帧：r2d_begin → C# Host.OnFrame(dt) → r2d_end
  * 输入：SDL 事件写入 csclib 的输入桥，C# 通过 Joy.Input 轮询
+ * 帧率：正常模式用 SDL_MAIN_CALLBACK_RATE 把迭代固定在 60Hz，dt 取
+ *       SDL_GetTicksNS() 的高精度真实间隔，游戏速度不随帧率变化；
+ *       冒烟模式不限制迭代速率，只把 dt 固定成 1/60 以保证断言可复现。
  *
  * 参数：
- *   --smoke N       无窗口冒烟：dummy 视频驱动 + 固定 60Hz 步长，跑 N 帧后退出
+ *   --smoke N       无窗口冒烟：dummy 视频驱动 + 固定步长，跑 N 帧后退出
  *   --assembly PATH 指定 C# 程序集（默认 JoyGame.dll，相对当前目录）
  * ============================================================ */
 #define SDL_MAIN_USE_CALLBACKS 1
@@ -39,7 +42,7 @@ static csx_method_p g_on_shutdown = NULL;
 
 static int      g_smoke_frames = 0;
 static int      g_frame = 0;
-static Uint64   g_last_tick = 0;
+static Uint64   g_last_tick_ns = 0;      /* SDL_GetTicksNS()，纳秒单调时钟 */
 static const char* g_assembly = "JoyGame.dll";
 
 static int find_arg(int argc, char* argv[], const char* name)
@@ -95,9 +98,16 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
         if (i >= 0 && i + 1 < argc) g_assembly = argv[i + 1];
 
         if (g_smoke_frames > 0) {
-                /* CI 无桌面会话：dummy 视频 + 软件渲染，保证 CreateWindow/Renderer 可用 */
+                /* CI 无桌面会话：dummy 视频 + 软件渲染，保证 CreateWindow/Renderer 可用。
+                 * 冒烟不限制迭代速率，让固定步长的 N 帧尽快跑完。 */
                 SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
                 SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+        } else {
+                /* r2d_create() 建的 renderer 默认 vsync=0；不设这个 hint 时
+                 * SDL_AppIterate 会以尽可能快的速度被调用（几百~上千 FPS）。
+                 * "60" = 每秒迭代 60 次；Windows 走 SDL 的 generic main callbacks，
+                 * 其 AddHintCallback 会用当前值立即触发一次，因此这里设置有效。 */
+                SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "60");
         }
 
         g_window = create_window(APP_TITLE, APP_W, APP_H);
@@ -142,7 +152,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
         printf("[host] clr up, assembly=%s, smoke=%d\n", g_assembly, g_smoke_frames);
         fflush(stdout);
-        g_last_tick = SDL_GetTicks();
+        g_last_tick_ns = SDL_GetTicksNS();
         return SDL_APP_CONTINUE;
 }
 
@@ -186,10 +196,13 @@ SDL_AppResult SDL_AppIterate(void* appstate)
         if (g_smoke_frames > 0) {
                 dt = 1.0f / 60.0f;          /* 冒烟用固定步长，结果可复现 */
         } else {
-                Uint64 now = SDL_GetTicks();
-                dt = (float)(now - g_last_tick) / 1000.0f;
-                g_last_tick = now;
-                if (dt <= 0.0f) dt = 1.0f / 60.0f;
+                /* 纳秒精度且不丢余量：SDL_GetTicks() 只有毫秒精度，帧间隔不足 1ms
+                 * 时会得到 dt=0；旧代码把 0 兜底成 1/60，等于凭空推进 16.7ms，
+                 * 帧率越高，游戏内时间被放大得越厉害（敌人/子弹/伤害全部变快）。 */
+                Uint64 now = SDL_GetTicksNS();
+                dt = (float)((double)(now - g_last_tick_ns) / (double)SDL_NS_PER_SECOND);
+                g_last_tick_ns = now;
+                if (dt < 0.0f) dt = 0.0f;   /* dt=0 就是这一帧没有时间推进 */
                 if (dt > 0.1f) dt = 0.1f;   /* 断点/窗口拖动后不要一次跳太远 */
         }
 

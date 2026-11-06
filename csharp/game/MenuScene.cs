@@ -42,15 +42,21 @@ namespace JoyGame
 
             Painter.Sprite(_app, _app.Assets.PlayerImage, cx, h * 0.5f - 74f, 34f, 90, 200, 140);
             Painter.TextCenter(_app, "JOY C# TOPDOWN", cx, h * 0.5f - 26f, big: true, r: 120, g: 220, b: 255);
-            Painter.TextCenter(_app, "C# 业务逻辑 + joy 引擎（Mono 宿主）", cx, h * 0.5f + 4f, r: 150, g: 160, b: 180);
+            Painter.TextCenter(_app,
+                Texts.Pick(_app, "C# 业务逻辑 + joy 引擎（Mono 宿主）", "C# gameplay + joy engine (CoreCLR)"),
+                cx, h * 0.5f + 4f, r: 150, g: 160, b: 180);
 
             if ((_app.Frame / 30) % 2 == 0)
             {
-                Painter.TextCenter(_app, "Enter / Space 开始", cx, h * 0.5f + 44f, r: 255, g: 226, b: 140);
+                Painter.TextCenter(_app, Texts.Pick(_app, "Enter / Space 开始", "Enter / Space to start"),
+                                   cx, h * 0.5f + 44f, r: 255, g: 226, b: 140);
             }
-            Painter.TextCenter(_app, "WASD 移动 · Space/鼠标左键 射击 · Esc 退出",
-                               cx, h * 0.5f + 76f, r: 130, g: 138, b: 158);
-            Painter.TextCenter(_app, "场景：Menu", cx, 18f, r: 90, g: 96, b: 112);
+            Painter.TextCenter(_app,
+                Texts.Pick(_app, "WASD 移动 · Space/鼠标左键 射击 · Esc 退出",
+                                "WASD move | Space/LMB fire | Esc quit"),
+                cx, h * 0.5f + 76f, r: 130, g: 138, b: 158);
+            Painter.TextCenter(_app, Texts.Pick(_app, "场景：Menu", "Scene: Menu"),
+                               cx, 18f, r: 90, g: 96, b: 112);
         }
     }
 }

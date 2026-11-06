@@ -79,6 +79,10 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 - 帧回调走 `csx_find_method` 缓存的方法句柄，不做每帧反射查找。
 - `csx_register_internal_call("Joy.X::Y", ...)` 按托管类型全名匹配，不关心声明
   位于哪个程序集，因此绑定声明拆到 `Joy.Bindings.dll` 后注册代码无需改动。
+- 正常模式用 `SDL_HINT_MAIN_CALLBACK_RATE=60` 把 `SDL_AppIterate` 固定在 60Hz
+  （`r2d_create()` 建的 renderer 默认 vsync=0，不设会跑满 CPU），`dt` 取
+  `SDL_GetTicksNS()` 的纳秒级真实间隔；C# 侧位移 / 冷却 / 生成计时都乘 `dt`，
+  速度与帧率无关。冒烟模式只把 `dt` 固定成 `1/60` 保证断言可复现，不限制迭代速率。
 
 ## 依赖
 
@@ -167,7 +171,7 @@ cmake --build build/app --config Release --parallel
 
 | 参数 | 说明 |
 |---|---|
-| `--smoke N` | 无窗口冒烟：dummy 视频驱动 + 固定 60Hz，跑 N 帧后按断言结果退出 |
+| `--smoke N` | 无窗口冒烟：dummy 视频驱动 + 固定 `1/60` 步长（不限制迭代速率），跑 N 帧后按断言结果退出 |
 | `--assembly PATH` | 指定程序集（默认 `JoyGame.dll`，相对当前工作目录） |
 
 ### 冒烟测试
@@ -209,6 +213,31 @@ C 宿主由 CMake 构建，C# 业务是独立的 SDK 风格工程。根 `CMakeLi
 
 若用 VS 的「打开文件夹」以 CMake 工作区方式打开仓库根，只会加载 C/C++ 目标，
 C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`。
+
+## 字体与中文界面
+
+底层文字渲染是支持 Unicode 的：`text_createx()` 先用 `utf8_decode_all` 把 UTF-8
+解成 codepoint，再用 `stbtt_GetCodepointHMetrics` / `stbtt_MakeCodepointBitmap`
+按码点取字形。但模板自带的 `assets/fonts/ARIALNB.TTF`（Arial Narrow Bold）只有
+拉丁字形，中文码点查不到字形会落到 `.notdef`，界面就成了豆腐块 / 乱码——**问题在
+字体文件，不在编码管线**。
+
+`Assets.Load` 按顺序尝试含 CJK 字形的字体，命中后用同一路径建 12 / 22 两个字号：
+
+| 顺序 | 路径 | 说明 |
+|---|---|---|
+| 1 | `assets/fonts/CJK.ttf` | 自备字体（推荐放这里），仓库不附带二进制字体 |
+| 2 | `C:/Windows/Fonts/simhei.ttf` | Windows 自带黑体（纯 TTF，约 9.7 MB） |
+| 3 | `C:/Windows/Fonts/Deng.ttf` | Windows 等线 |
+| 回退 | `assets/fonts/ARIALNB.TTF` | 仅拉丁字形 |
+
+裁剪后的 BCL 没有 `File.Exists`，所以靠 `font_create` 返回 `IntPtr.Zero` 判断候选是否可用。
+只有命中 CJK 字体时 `Assets.HasCjkFont` 才为 true，界面显示中文；否则文案经
+`runtime/Texts.cs` 的 `Texts.Pick` 降级为纯 ASCII，保证任何环境都不乱码。
+
+想固定用某套中文字体，把它的 TTF 放到第一条路径即可。请用 TrueType `glyf` 轮廓的
+单字体 `.ttf`，不要用 `.ttc` 字体集合或 CFF 轮廓的 `.otf`——`jfont.c` 用
+`stbtt_InitFont(data, 0)`，对这两类支持有限。
 
 ## 绑定体系
 

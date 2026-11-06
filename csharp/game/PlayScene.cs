@@ -289,13 +289,17 @@ namespace JoyGame
             Painter.Stroke(_app, 12f, 12f, barW, 10f, 90, 96, 118);
             Painter.Text(_app, "HP " + (int)Math.Ceiling(Math.Max(0f, _player.Hp)), 12f, 26f);
 
-            string stats = "击杀 " + _kills + "  ·  波次 " + Wave + "  ·  存活 "
-                           + _elapsed.ToString("0.0", CultureInfo.InvariantCulture) + "s";
+            string secs = _elapsed.ToString("0.0", CultureInfo.InvariantCulture);
+            string stats = Texts.Pick(_app,
+                "击杀 " + _kills + "  ·  波次 " + Wave + "  ·  存活 " + secs + "s",
+                "KILLS " + _kills + " | WAVE " + Wave + " | TIME " + secs + "s");
             int sw = Painter.TextWidth(_app, stats);
             Painter.Text(_app, stats, w - 12f - sw, 12f);
 
-            Painter.Text(_app, "敌人 " + _enemies.Count, 12f, h - 24f);
-            string hint = "WASD 移动 · Space 射击 · Esc 菜单";
+            Painter.Text(_app, Texts.Pick(_app, "敌人 " + _enemies.Count, "ENEMIES " + _enemies.Count),
+                         12f, h - 24f);
+            string hint = Texts.Pick(_app, "WASD 移动 · Space 射击 · Esc 菜单",
+                                          "WASD move | Space fire | Esc menu");
             int hw = Painter.TextWidth(_app, hint);
             Painter.Text(_app, hint, w - 12f - hw, h - 24f, 120, 128, 148);
         }
