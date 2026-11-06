@@ -38,7 +38,7 @@ endif()
 
 # ---- C# 运行时：joy 子项目 runtimes/ 提供 -----------------------------------
 # 该构建来自 dotnet/runtime：coreclr.dll 内静态链接了 Mono 运行时组件，
-# 同时导出 coreclr_* 与 mono_* 两套宿主 API，因此 joy_csharp.c / csclib
+# 同时导出 coreclr_* 与 mono_* 两套宿主 API，因此 jcsx.c 与 bindings/ 胶水
 # 仍可沿用 Mono 嵌入 API，无需重写宿主层。
 #
 # 目录约定：runtimes/ 根是跨平台共享的 BCL(libs/) 与头文件(include/mono-2.0)，

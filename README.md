@@ -105,7 +105,7 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
 
 `coreclr.dll` 是 `dotnet/runtime` 的自定义构建（CoreCLR + 静态链接 Mono 运行时组件），
-同时导出 `coreclr_*` 与 `mono_*` 两套宿主 API，因此 `joy_csharp.c` / `csclib` 的
+同时导出 `coreclr_*` 与 `mono_*` 两套宿主 API，因此 `jcsx.c` 与 `bindings/` 胶水的
 `csx_*` 嵌入代码无需改写。CMake 的 `JOY_CLR_ROOT` 默认指向 `runtimes/`，
 `JOY_CLR_PLATFORM` 依据 `CMAKE_SYSTEM_NAME` / `ANDROID_ABI` 自动推导
 （Windows → `windows-x64`，Android arm64 → `android-arm64`），也可 `-D` 覆盖；
