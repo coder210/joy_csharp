@@ -86,6 +86,20 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
     # RelWithDebInfo 映射过去，否则 VS 会提示「配置映射不正确」。
     set_property(TARGET JoyGame PROPERTY MAP_IMPORTED_CONFIG_MINSIZEREL Release)
     set_property(TARGET JoyGame PROPERTY MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+
+    # Joy.Bindings 只是 JoyGame 的 ProjectReference，MSBuild 会隐式构建它，
+    # 但不会把它列进解决方案，VS 解决方案资源管理器里看不到、也没有项目上下文。
+    # 显式挂进来才能在 VS 里浏览绑定源码，并让「生成解决方案」先构建它。
+    set(_joy_bindings_csproj "${JOY_SOURCE_DIR}/modules/csharp/csharp/Joy.Bindings.csproj")
+    if(EXISTS "${_joy_bindings_csproj}")
+        include_external_msproject(
+            Joy.Bindings
+            "${_joy_bindings_csproj}"
+            TYPE "FAE04EC0-301F-11D3-BF4B-00C04F79EFBC"
+            PLATFORM "Any CPU")
+        set_property(TARGET Joy.Bindings PROPERTY MAP_IMPORTED_CONFIG_MINSIZEREL Release)
+        set_property(TARGET Joy.Bindings PROPERTY MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+    endif()
 endif()
 
 # ---- 运行期产物：assets/ + JoyGame.dll + CoreCLR 运行时与 BCL ---------------
