@@ -24,14 +24,11 @@ csharp/                   C# 业务工程（程序集 JoyGame.dll，netstandard2
 
 assets/                   模板资源（玩家/敌人精灵、字体）
 third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
-  modules/                可选脚本后端（统一契约：CMakeLists + 公开头 + 胶水 + stub.c）
-    lua/  js/             Lua / duktape 后端，bindings/ 放胶水，VM 源码在 external/
-    csharp/               C# 后端（模块内零子目录、全部平铺）
-      CMakeLists.txt      模块自描述，导出 JOY_BINDINGS_CSPROJ
-      joy_csharp.h/.c     唯一对外头 + CLR 宿主
-      csclib_*.c          手写 internal call + 生成的 wrapper
-      stub.c              模块关闭时的空桩
-      Joy.Bindings.csproj / InternalCalls.cs / NativeCalls.cs / gen_csclib.js
+  modules/                可选脚本后端（统一契约：CMakeLists + 公开头 + bindings/ + stub.c）
+    lua/ js/ csharp/      CMakeLists.txt、joy_<name>.h/.c（宿主）、stub.c、bindings/
+      bindings/*.c        语言胶水，把 joy C API 暴露给该脚本语言
+    csharp/ 额外            C# 托管侧：Joy.Bindings.csproj / InternalCalls.cs /
+                           NativeCalls.cs / gen_csclib.js（导出 JOY_BINDINGS_CSPROJ）
   external/               第三方源码（参与编译）：lua/ lua_cjson/ duktape/ cgltf/ klib/ …
   runtimes/               预编译运行时（不参与编译）
     libs/ include/mono-2.0/   跨平台共享，唯一一份
@@ -262,8 +259,8 @@ ASCII 降级分支，以便将来换回非 CJK 字体时不会乱码。
 
 | 层 | 内容 | 维护位置 |
 |---|---|---|
-| 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `modules/csharp/gen_csclib.js` 的 `ALLOW_NAMES` → 就地生成 `csclib_generated.c` 与 `InternalCalls.cs` |
-| 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`modules/csharp/csclib_{draw,input,host}.c`；C# 声明：`modules/csharp/NativeCalls.cs` |
+| 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `modules/csharp/gen_csclib.js` 的 `ALLOW_NAMES` → 生成 `bindings/csclib_generated.c` 与 `InternalCalls.cs` |
+| 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`modules/csharp/bindings/csclib_{draw,input,host}.c`；C# 声明：`modules/csharp/NativeCalls.cs` |
 | C# 程序集 | 上述两类 `public` 声明统一编入 `Joy.Bindings.dll` | `modules/csharp/Joy.Bindings.csproj` |
 
 模块只暴露业务实际调用的 internal call。生成层由 `ALLOW_NAMES` 白名单控制，
@@ -275,7 +272,7 @@ SDL / KCP / socket / mathx / collision / utils 绑定文件已删除。
 
 ```powershell
 node third_party/joy/modules/csharp/gen_csclib.js
-# 产出就地写入 modules/csharp/ 根：csclib_generated.c 与 InternalCalls.cs
+# 产出：modules/csharp/bindings/csclib_generated.c 与模块根 InternalCalls.cs
 # 默认解析 joy 源码树自身；也可用 --joy <目录> 或环境变量 JOY_DIR 覆盖
 ```
 
@@ -287,7 +284,7 @@ node third_party/joy/modules/csharp/gen_csclib.js
 - `public`：生成的类都是 `public static class`，因为声明编入独立的 `Joy.Bindings.dll`，业务程序集要跨程序集访问
 - 标量 → 同名 C# 类型；`const char*` 入参 → `string`；`*_p` / `void*` → `IntPtr`
 - **小结构体**（字段全标量、总大小 ≤ 16 字节，如 `vec2_t` / `jrect_t`）→ C# `[StructLayout(Sequential)]` 结构体，按值传参；`EXTRA_STRUCTS` 强制输出手写 ABI 自检所需的结构体
-- 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `modules/csharp/csclib_draw.c` 的扁平包装覆盖
+- 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `modules/csharp/bindings/csclib_draw.c` 的扁平包装覆盖
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
@@ -295,8 +292,8 @@ node third_party/joy/modules/csharp/gen_csclib.js
 
 - **加一个场景**：实现 `runtime/IScene.cs` 的 `IScene`（`Enter/Update/Render`），在 `game/` 下新建场景并用 `app.ChangeScene(...)` 切换。
 - **加一种敌人**：复制 `game/Enemy.cs` 的字段，在 `game/PlayScene.cs` 的 `UpdateSpawn` 里决定生成规则，`Render` 里选精灵。
-- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/csclib_draw.c` 加扁平包装 + `modules/csharp/NativeCalls.cs` 的 `public` 声明 + 注册一行，然后重新生成 / 构建。
-- **加输入**：joy 子项目 `modules/csharp/csclib_input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `runtime/Keys.cs` 的常量或数字。
+- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/bindings/csclib_draw.c` 加扁平包装 + `modules/csharp/NativeCalls.cs` 的 `public` 声明 + 注册一行，然后重新生成 / 构建。
+- **加输入**：joy 子项目 `modules/csharp/bindings/csclib_input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `runtime/Keys.cs` 的常量或数字。
 
 ## CI
 
