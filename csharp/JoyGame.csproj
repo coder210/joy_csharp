@@ -8,7 +8,7 @@
     <Deterministic>true</Deterministic>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <!-- joy 的 C# 绑定项目位置；换用另一份 joy 源码树时可覆盖该属性 -->
-    <JoyCSharpDir Condition="'$(JoyCSharpDir)' == ''">$(MSBuildProjectDirectory)/../third_party/joy/modules/csharp/csharp</JoyCSharpDir>
+    <JoyCSharpDir Condition="'$(JoyCSharpDir)' == ''">$(MSBuildProjectDirectory)/../third_party/joy/modules/csharp</JoyCSharpDir>
   </PropertyGroup>
   <ItemGroup>
     <!-- 所有 Joy.* 声明由 joy 子项目的 Joy.Bindings.csproj 提供（程序集引用） -->

@@ -36,22 +36,64 @@ if(NOT EXISTS "${JOY_SOURCE_DIR}/joy.h")
         "joy_csharp_test_app: 找不到 joy 源码树，请设置 -DJOY_SOURCE_DIR=<含 joy.h 的目录>")
 endif()
 
-# ---- C# 运行时：joy 子项目 modules/csharp/runtime 提供 ----------------------
+# ---- C# 运行时：joy 子项目 runtimes/ 提供 -----------------------------------
 # 该构建来自 dotnet/runtime：coreclr.dll 内静态链接了 Mono 运行时组件，
 # 同时导出 coreclr_* 与 mono_* 两套宿主 API，因此 joy_csharp.c / csclib
-# 仍可沿用 Mono 嵌入 API，无需重写宿主层；BCL 在 libs/（net8.0）。
-# 需要换成别的运行时时：-DJOY_CLR_ROOT=<含 coreclr.dll 的目录>。
-set(JOY_CLR_ROOT "${JOY_SOURCE_DIR}/modules/csharp/runtime/windows.x64.Release"
-    CACHE PATH "CoreCLR 运行时目录（默认取 joy 子项目 modules/csharp/runtime）")
-# 缓存里若还留着已失效的旧路径，自动回退到 joy 子项目内置的那套
-set(_clr_root "${JOY_SOURCE_DIR}/modules/csharp/runtime/windows.x64.Release")
-if(JOY_CLR_ROOT AND EXISTS "${JOY_CLR_ROOT}/coreclr.dll")
+# 仍可沿用 Mono 嵌入 API，无需重写宿主层。
+#
+# 目录约定：runtimes/ 根是跨平台共享的 BCL(libs/) 与头文件(include/mono-2.0)，
+# runtimes/<platform>/ 只放该平台原生二进制（Windows: coreclr.dll + import lib；
+# 后续 Android: libcoreclr.so）。换整套运行时用 -DJOY_CLR_ROOT=<目录>。
+set(JOY_CLR_ROOT "${JOY_SOURCE_DIR}/runtimes"
+    CACHE PATH "CoreCLR 运行时根目录（默认取 joy 子项目 runtimes/）")
+
+# 平台目录自动推导，可 -DJOY_CLR_PLATFORM=<目录名> 覆盖
+if(NOT JOY_CLR_PLATFORM)
+    if(ANDROID)
+        if(ANDROID_ABI STREQUAL "arm64-v8a")
+            set(JOY_CLR_PLATFORM "android-arm64")
+        elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+            set(JOY_CLR_PLATFORM "android-armv7")
+        elseif(ANDROID_ABI STREQUAL "x86_64")
+            set(JOY_CLR_PLATFORM "android-x64")
+        else()
+            set(JOY_CLR_PLATFORM "android-${ANDROID_ABI}")
+        endif()
+    elseif(WIN32)
+        set(JOY_CLR_PLATFORM "windows-x64")
+    elseif(APPLE)
+        set(JOY_CLR_PLATFORM "macos-arm64")
+    else()
+        set(JOY_CLR_PLATFORM "linux-x64")
+    endif()
+endif()
+
+# 缓存里若还留着重构前已失效的旧路径，自动回退到 joy 子项目内置的那套
+set(_clr_root "${JOY_SOURCE_DIR}/runtimes")
+if(JOY_CLR_ROOT AND EXISTS "${JOY_CLR_ROOT}/libs/System.Private.CoreLib.dll")
     set(_clr_root "${JOY_CLR_ROOT}")
 endif()
+set(JOY_CLR_PLATFORM_DIR "${_clr_root}/${JOY_CLR_PLATFORM}")
+
 set(MONO_INCLUDE_DIR "${_clr_root}/include/mono-2.0")
-set(MONO_LIBRARIES   "${_clr_root}/coreclr.import.lib")
-set(MONO_RUNTIME_DLL "${_clr_root}/coreclr.dll")
 set(JOY_CLR_LIB_DIR  "${_clr_root}/libs")
+# 共享物默认取根；平台目录里若另放一份（如 AOT 过的 CoreLib）则优先用平台版
+if(EXISTS "${JOY_CLR_PLATFORM_DIR}/libs/System.Private.CoreLib.dll")
+    set(JOY_CLR_LIB_DIR "${JOY_CLR_PLATFORM_DIR}/libs")
+endif()
+if(EXISTS "${JOY_CLR_PLATFORM_DIR}/include/mono-2.0")
+    set(MONO_INCLUDE_DIR "${JOY_CLR_PLATFORM_DIR}/include/mono-2.0")
+endif()
+
+if(WIN32)
+    set(MONO_LIBRARIES   "${JOY_CLR_PLATFORM_DIR}/coreclr.import.lib")
+    set(MONO_RUNTIME_DLL "${JOY_CLR_PLATFORM_DIR}/coreclr.dll")
+else()
+    # Android / Linux 的部署方式不同（原生库进 APK lib/<abi>/ 或系统库路径），
+    # 这里只给出路径变量，实际打包逻辑待对应平台落地时补。
+    set(MONO_LIBRARIES   "${JOY_CLR_PLATFORM_DIR}/libcoreclr.so")
+    set(MONO_RUNTIME_DLL "${JOY_CLR_PLATFORM_DIR}/libcoreclr.so")
+endif()
 
 # ---- C# 业务程序集 ---------------------------------------------------------
 set(JOY_GAME_DLL "${CMAKE_CURRENT_SOURCE_DIR}/build/csharp/JoyGame.dll"
@@ -90,7 +132,8 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
     # Joy.Bindings 只是 JoyGame 的 ProjectReference，MSBuild 会隐式构建它，
     # 但不会把它列进解决方案，VS 解决方案资源管理器里看不到、也没有项目上下文。
     # 显式挂进来才能在 VS 里浏览绑定源码，并让「生成解决方案」先构建它。
-    set(_joy_bindings_csproj "${JOY_SOURCE_DIR}/modules/csharp/csharp/Joy.Bindings.csproj")
+    # 路径由 joy 的 csharp 模块 CMakeLists 导出，主仓不再硬编码模块内部目录
+    set(_joy_bindings_csproj "${JOY_BINDINGS_CSPROJ}")
     if(EXISTS "${_joy_bindings_csproj}")
         include_external_msproject(
             Joy.Bindings
@@ -149,7 +192,7 @@ if(EXISTS "${JOY_BINDINGS_DLL}")
 else()
     message(WARNING
         "未找到 Joy.Bindings.dll（${JOY_BINDINGS_DLL}）：JoyGame.dll 依赖它，先执行 "
-        "dotnet build third_party/joy/modules/csharp/csharp/Joy.Bindings.csproj -c Release -o build/csharp")
+        "dotnet build third_party/joy/modules/csharp/Joy.Bindings.csproj -c Release -o build/csharp")
 endif()
 
 # ---- 冒烟测试 --------------------------------------------------------------

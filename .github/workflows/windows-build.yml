@@ -34,11 +34,11 @@ jobs:
         # 显式构建一次绑定项目，确保 Joy.Bindings.dll 落在 build/csharp/，
         # 供 CMake post-build 拷进 CLR 搜索路径 lib/。
         run: |
-          dotnet build third_party/joy/modules/csharp/csharp/Joy.Bindings.csproj -c Release -o build/csharp
+          dotnet build third_party/joy/modules/csharp/Joy.Bindings.csproj -c Release -o build/csharp
           dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
 
       - name: Configure CMake
-        # 运行时由 joy 子模块 modules/csharp/runtime 提供，无需 -DMONO_* 参数
+        # 运行时由 joy 子模块 runtimes/ 提供（BCL/头共享，平台原生库在 <platform>/），无需 -DMONO_* 参数
         run: >
           cmake -S . -B build/app -A x64
 

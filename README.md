@@ -24,28 +24,40 @@ csharp/                   C# 业务工程（程序集 JoyGame.dll，netstandard2
 
 assets/                   模板资源（玩家/敌人精灵、字体）
 third_party/joy/          joy 引擎（git submodule，提交号固定在 gitlink 里）
-  modules/csharp/         C# 绑定模块
-    joy_csharp.c/.h       C 侧唯一对外入口（宿主只 include joy_csharp.h）
-    csclib/               手写 internal call 实现 + 自动生成的 wrapper
-    csharp/               C# 绑定工程
-      Joy.Bindings.csproj  产出 Joy.Bindings.dll（程序集引用，非源码链接）
-      Joy/InternalCalls.cs  自动生成的 public 声明
-      Joy/NativeCalls.cs    手写热点的 public 声明
-    tools/gen_csclib.js   绑定生成器
-    runtime/windows.x64.Release/  CoreCLR 运行时 + BCL
+  modules/                可选脚本后端（统一契约：CMakeLists + 公开头 + 胶水 + stub.c）
+    lua/  js/             Lua / duktape 后端，bindings/ 放胶水，VM 源码在 external/
+    csharp/               C# 后端（模块内零子目录、全部平铺）
+      CMakeLists.txt      模块自描述，导出 JOY_BINDINGS_CSPROJ
+      joy_csharp.h/.c     唯一对外头 + CLR 宿主
+      csclib_*.c          手写 internal call + 生成的 wrapper
+      stub.c              模块关闭时的空桩
+      Joy.Bindings.csproj / InternalCalls.cs / NativeCalls.cs / gen_csclib.js
+  external/               第三方源码（参与编译）：lua/ lua_cjson/ duktape/ cgltf/ klib/ …
+  runtimes/               预编译运行时（不参与编译）
+    libs/ include/mono-2.0/   跨平台共享，唯一一份
+    windows-x64/              平台原生二进制（后续 android-arm64/ 等）
 ```
 
 ## 模块归属
 
-C# 绑定层（Mono 宿主、`csclib/`、自动生成的 `Joy.InternalCalls`、手写声明）全部属于
-**joy 子项目** `third_party/joy/modules/csharp`，本仓不再持有任何副本：
+C# 绑定层（Mono 宿主、internal call 胶水、自动生成的 `Joy.InternalCalls`、手写声明）
+全部属于 **joy 子项目**，本仓不再持有任何副本。joy 仓按三类组织：
 
-- C 侧：`joy_add_sources(joy_csharp_test_app MODULES csharp)` 把 `joy/modules/csharp`
-  的源码直接编入宿主 target（不建库、不产 DLL），并定义 `ENABLED_CSHARP_SCRIPT`；
-  宿主只 `#include "joy_csharp.h"`，注册入口、输入桥、宿主状态全在该头文件。
-- C# 侧：joy 的 `csharp/Joy.Bindings.csproj` 单独编译成 `Joy.Bindings.dll`，
-  `JoyGame.csproj` 通过 `ProjectReference` 引用它。所有 `Joy.*` 声明都在 joy，
-  且必须是 `public` 才能跨程序集可见；本仓只保留玩法与运行时骨架。
+| 类别 | 位置 | 内容 |
+|---|---|---|
+| joy 自己写的代码 | 根目录 / `modules/<name>/` | 核心、后端胶水与模块契约 |
+| 第三方源码（要编译） | `external/` | Lua VM、duktape、lua_cjson、mongoose、kcp… |
+| 预编译二进制（不编译） | `runtimes/` | CLR 原生库、BCL、Mono 头 |
+
+- C 侧：三个后端遵循统一契约 —— 各自的 `CMakeLists.txt` 提供
+  `joy_module_<name>`（INTERFACE），源码经 `target_sources(INTERFACE)` 直接编入
+  宿主 target（不建库、不产 DLL），关闭时由模块自带 `stub.c` 提供空桩；
+  `joy_add.cmake` 的循环不含任何模块名特例。
+- C# 侧：joy 的 `modules/csharp/Joy.Bindings.csproj` 单独编译成
+  `Joy.Bindings.dll`，`JoyGame.csproj` 通过 `ProjectReference` 引用它。所有
+  `Joy.*` 声明都在 joy，且必须是 `public` 才能跨程序集可见；本仓只保留玩法与
+  运行时骨架。
+- 宿主只 `#include "joy_csharp.h"`，注册入口、输入桥、宿主状态全在该头文件。
 
 `JoyGame.csproj` 按职责显式分组，不再用一个 `game\**\*.cs` 一把梭：
 
@@ -56,7 +68,7 @@ C# 绑定层（Mono 宿主、`csclib/`、自动生成的 `Joy.InternalCalls`、�
 | `csharp/test/` | `SmokeScript` | 本仓测试脚本 |
 
 `JoyGame.csproj` 用 `$(JoyCSharpDir)` 定位 joy 的绑定工程（默认
-`../third_party/joy/modules/csharp/csharp`），换用另一份 joy 源码树时可覆盖该属性。
+`../third_party/joy/modules/csharp`），换用另一份 joy 源码树时可覆盖该属性。
 
 运行时约束：`Joy.Bindings.dll` 必须部署到 CLR 搜索路径 `lib/`（宿主用
 `mono_set_dirs` 指定，依赖程序集只从那里解析），只放在 exe 旁会加载失败，
@@ -90,18 +102,23 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 |---|---|
 | joy 引擎 | 仓内 **git 子模块** `third_party/joy`（`git submodule update --init`） |
 | C# 绑定模块 | 同一子模块里的 `modules/csharp`，由 `MODULES csharp` 启用；C 侧源码编入宿主，C# 侧由 `Joy.Bindings.csproj` 产出独立程序集，本仓不含副本 |
-| C# 运行时 | joy 子项目 `third_party/joy/modules/csharp/runtime/windows.x64.Release/`：`coreclr.dll` + `include/mono-2.0/` + `libs/`（.NET 8 BCL），无需安装 Mono |
+| C# 运行时 | joy 子项目 `third_party/joy/runtimes/`：根下 `libs/`（.NET 8 BCL）与 `include/mono-2.0/` 跨平台共享；`windows-x64/coreclr.dll` + import lib 等平台原生库按 `JOY_CLR_PLATFORM` 选取，无需安装 Mono |
 | .NET SDK 8 | 编译 `Joy.Bindings.dll` 与 `JoyGame.dll`（目标框架 netstandard2.0，由 CoreCLR 加载） |
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
 
 `coreclr.dll` 是 `dotnet/runtime` 的自定义构建（CoreCLR + 静态链接 Mono 运行时组件），
 同时导出 `coreclr_*` 与 `mono_*` 两套宿主 API，因此 `joy_csharp.c` / `csclib` 的
-`csx_*` 嵌入代码无需改写。CMake 的 `JOY_CLR_ROOT` 默认从 `JOY_SOURCE_DIR` 解析到
-`modules/csharp/runtime/windows.x64.Release`，post-build 会把 `coreclr.dll` 和
+`csx_*` 嵌入代码无需改写。CMake 的 `JOY_CLR_ROOT` 默认指向 `runtimes/`，
+`JOY_CLR_PLATFORM` 依据 `CMAKE_SYSTEM_NAME` / `ANDROID_ABI` 自动推导
+（Windows → `windows-x64`，Android arm64 → `android-arm64`），也可 `-D` 覆盖；
+共享的 BCL 与头文件取根，平台原生库取 `<platform>/`，若平台目录另放了
+`libs/` 或 `include/` 则优先用平台版。post-build 会把 `coreclr.dll` 和
 `libs/`（拷成 exe 旁的 `lib/`）放进输出目录，`main.c` 在 `csx_create()` 前用
 `MONO_LIB_DIR` 把 BCL 目录指过去。换成另一套同布局的构建（含
 `coreclr.import.lib` / `include/mono-2.0` / `libs`）用 `-DJOY_CLR_ROOT=<目录>`；
-换回系统 Mono 则需同时改 CMake 的运行时段与 post-build 拷贝。post-build 会先清空
+换回系统 Mono 则需同时改 CMake 的运行时段与 post-build 拷贝。
+Android 的部署策略（原生库进 APK `lib/<abi>/`、BCL 放 assets 再解压）尚未实现，
+本次只预留目录与变量。post-build 会先清空
 输出目录的 `lib/` 再拷贝 BCL，避免裁剪后残留旧程序集，**最后**追加
 `Joy.Bindings.dll`；这个顺序不能颠倒，否则绑定 DLL 会被清空步骤删掉。
 
@@ -148,7 +165,7 @@ git submodule update --init --recursive
 
 ```powershell
 # 1) joy 的绑定程序集 + 本仓业务程序集（都输出到 build/csharp）
-dotnet build third_party/joy/modules/csharp/csharp/Joy.Bindings.csproj -c Release -o build/csharp
+dotnet build third_party/joy/modules/csharp/Joy.Bindings.csproj -c Release -o build/csharp
 dotnet build csharp/JoyGame.csproj -c Release -o build/csharp
 
 # 2) C 宿主（CMake 自动把 assets / JoyGame.dll / coreclr.dll + BCL 拷到输出目录，
@@ -245,9 +262,9 @@ C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`�
 
 | 层 | 内容 | 维护位置 |
 |---|---|---|
-| 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `tools/gen_csclib.js` 的 `ALLOW_NAMES` → `csclib/generated/`、`csharp/Joy/InternalCalls.cs`（相对 `modules/csharp/`） |
-| 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`csclib/draw.c`、`input.c`、`host.c`；C# 声明：`csharp/Joy/NativeCalls.cs` |
-| C# 程序集 | 上述两类 `public` 声明统一编入 `Joy.Bindings.dll` | `csharp/Joy.Bindings.csproj` |
+| 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `modules/csharp/gen_csclib.js` 的 `ALLOW_NAMES` → 就地生成 `csclib_generated.c` 与 `InternalCalls.cs` |
+| 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`modules/csharp/csclib_{draw,input,host}.c`；C# 声明：`modules/csharp/NativeCalls.cs` |
+| C# 程序集 | 上述两类 `public` 声明统一编入 `Joy.Bindings.dll` | `modules/csharp/Joy.Bindings.csproj` |
 
 模块只暴露业务实际调用的 internal call。生成层由 `ALLOW_NAMES` 白名单控制，
 未登记的 joy.h API 不会透给 C#；所有 wrapper 只调用 `joy.h` 声明的函数与 C
@@ -257,8 +274,8 @@ SDL / KCP / socket / mathx / collision / utils 绑定文件已删除。
 重新生成（改动落在 joy 子项目里，需在 joy 仓库提交后更新本仓 gitlink）：
 
 ```powershell
-node third_party/joy/modules/csharp/tools/gen_csclib.js
-# 产出写入 modules/csharp/csclib/generated/ 与 modules/csharp/csharp/Joy/
+node third_party/joy/modules/csharp/gen_csclib.js
+# 产出就地写入 modules/csharp/ 根：csclib_generated.c 与 InternalCalls.cs
 # 默认解析 joy 源码树自身；也可用 --joy <目录> 或环境变量 JOY_DIR 覆盖
 ```
 
@@ -270,7 +287,7 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 - `public`：生成的类都是 `public static class`，因为声明编入独立的 `Joy.Bindings.dll`，业务程序集要跨程序集访问
 - 标量 → 同名 C# 类型；`const char*` 入参 → `string`；`*_p` / `void*` → `IntPtr`
 - **小结构体**（字段全标量、总大小 ≤ 16 字节，如 `vec2_t` / `jrect_t`）→ C# `[StructLayout(Sequential)]` 结构体，按值传参；`EXTRA_STRUCTS` 强制输出手写 ABI 自检所需的结构体
-- 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `modules/csharp/csclib/draw.c` 的扁平包装覆盖
+- 跳过：结构体指针、结构体返回值、数组、函数指针、可变参数、输出参数（`T*`）——这些热点由 `modules/csharp/csclib_draw.c` 的扁平包装覆盖
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
@@ -278,8 +295,8 @@ node third_party/joy/modules/csharp/tools/gen_csclib.js
 
 - **加一个场景**：实现 `runtime/IScene.cs` 的 `IScene`（`Enter/Update/Render`），在 `game/` 下新建场景并用 `app.ChangeScene(...)` 切换。
 - **加一种敌人**：复制 `game/Enemy.cs` 的字段，在 `game/PlayScene.cs` 的 `UpdateSpawn` 里决定生成规则，`Render` 里选精灵。
-- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/csclib/draw.c` 加扁平包装 + `csharp/Joy/NativeCalls.cs` 的 `public` 声明 + 注册一行，然后重新生成 / 构建。
-- **加输入**：joy 子项目 `modules/csharp/csclib/input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `runtime/Keys.cs` 的常量或数字。
+- **加绘制**：优先用 `runtime/Painter.cs`；需要新 API 时在 joy 子项目 `modules/csharp/csclib_draw.c` 加扁平包装 + `modules/csharp/NativeCalls.cs` 的 `public` 声明 + 注册一行，然后重新生成 / 构建。
+- **加输入**：joy 子项目 `modules/csharp/csclib_input.c` 已经透传全部 SDL scancode（宿主写入），C# 侧直接用 `runtime/Keys.cs` 的常量或数字。
 
 ## CI
 
