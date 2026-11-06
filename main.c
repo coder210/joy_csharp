@@ -21,6 +21,9 @@
 #include "joy_csharp.h"
 /* 共享绑定运行层（joy/api）：只在冒烟时跑 C 层自检，不改变业务链路。 */
 #include <joy/api/joy_api.h>
+/* lua / js 后端的新绑定层（与 cs 同名 Joy.Api.Bindings.*），同样只在冒烟时自检。 */
+#include "joy_lua.h"
+#include "joy_js.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,6 +111,29 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
                         return SDL_APP_FAILURE;
                 }
                 printf("[api] selftest PASS\n");
+                {
+                        /* 同一份注册表在 lua / js 上的端到端验证：
+                         * 调用、句柄创建、参数类型守卫、GC 自动释放。 */
+                        const char* lua_err = luax_api_selftest();
+                        if (lua_err && strcmp(lua_err, "lua/disabled") == 0) {
+                                printf("[api] lua skipped (module off)\n");
+                        } else if (lua_err) {
+                                fprintf(stderr, "[api] lua selftest FAILED: %s\n", lua_err);
+                                return SDL_APP_FAILURE;
+                        } else {
+                                printf("[api] lua selftest PASS\n");
+                        }
+
+                        const char* js_err = jsopen_api_selftest();
+                        if (js_err && strcmp(js_err, "js/disabled") == 0) {
+                                printf("[api] js skipped (module off)\n");
+                        } else if (js_err) {
+                                fprintf(stderr, "[api] js selftest FAILED: %s\n", js_err);
+                                return SDL_APP_FAILURE;
+                        } else {
+                                printf("[api] js selftest PASS\n");
+                        }
+                }
                 fflush(stdout);
                 /* CI 无桌面会话：dummy 视频 + 软件渲染，保证 CreateWindow/Renderer 可用。
                  * 冒烟不限制迭代速率，让固定步长的 N 帧尽快跑完。 */

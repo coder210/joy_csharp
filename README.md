@@ -8,7 +8,7 @@ joy 引擎的 **C# 脚本模板**：C 侧只留窗口 / 主循环 / 事件泵，
 
 ```
 main.c                    C 宿主：窗口 + 主循环 + SDL 事件泵；每帧回调 C# Host.OnFrame
-CMakeLists.txt            仓库根构建入口（MODULES cs 接入 joy 绑定模块 + 拷贝运行期产物）
+CMakeLists.txt            仓库根构建入口（MODULES cs lua js 接入三端绑定模块 + 拷贝运行期产物）
 
 csharp/                   C# 业务工程（程序集 JoyGame.dll，netstandard2.0）
   JoyGame.csproj          通过 ProjectReference 引用 joy 的 Joy.Bindings.csproj
@@ -100,7 +100,7 @@ C 宿主 main.c                              C# 业务 JoyGame.dll
 | 依赖 | 说明 |
 |---|---|
 | joy 引擎 | 仓内 **git 子模块** `third_party/joy`（`git submodule update --init`） |
-| C# 绑定模块 | 同一子模块里的 `modules/cs`，由 `MODULES cs` 启用；C 侧源码编入宿主，C# 侧由 `Joy.Bindings.csproj` 产出独立程序集，本仓不含副本 |
+| 脚本绑定模块 | 同一子模块里的 `modules/{cs,lua,js}`，由 `MODULES cs lua js` 启用；C 侧源码编入宿主，C# 侧由 `Joy.Bindings.csproj` 产出独立程序集，本仓不含副本 |
 | C# 运行时 | joy 子项目 `third_party/joy/runtimes/`：根下 `libs/`（.NET 8 BCL）与 `include/mono-2.0/` 跨平台共享；`windows-x64/coreclr.dll` + import lib 等平台原生库按 `JOY_CLR_PLATFORM` 选取，无需安装 Mono |
 | .NET SDK 8 | 编译 `Joy.Bindings.dll` 与 `JoyGame.dll`（目标框架 netstandard2.0，由 CoreCLR 加载） |
 | CMake ≥ 3.16 + MSVC | 构建宿主 |
@@ -200,14 +200,16 @@ $env:SDL_VIDEODRIVER="dummy"
 
 脚本模拟按键跑完 **Menu → Play → GameOver → 重开 Play**，断言：
 
-- IDL 新绑定链路：C# 调到共享 thunk、句柄是强类型对象、GC 后自动析构（`api=True`）
+- IDL 新绑定链路：Lua / JS / C# 三个后端都能调用 `Joy.Api.Bindings.*`，
+  句柄为不透明对象、GC 后自动析构（`api=True`）
 - 结构体按值传递的 ABI 正确（`abi=True`）
 - 场景切换发生 2 次（菜单进游戏、死亡后重开）
 - 输入真的驱动了移动、射击
 - 子弹命中并击杀敌人
 - 敌人 AI 确实在靠近玩家
 
-输出 `[api] selftest PASS`、`[api.cs] PASS ...` 与
+输出 `[api] selftest PASS`（C 层）、`[api] lua selftest PASS`、
+`[api] js selftest PASS`、`[api.cs] PASS ...` 与
 `[smoke] PASS api=True abi=True play=2 ...` 并退出；失败则 `[smoke] FAIL ...` 且退出码为 1。
 
 ## 在 Visual Studio 中开发
@@ -265,7 +267,7 @@ ASCII 降级分支，以便将来换回非 CJK 字体时不会乱码。
 |---|---|---|
 | 自动生成（白名单） | 仅 `font_create` / `image_create` 两个 joy C API | `modules/cs/gen_csclib.js` 的 `ALLOW_NAMES` → 生成 `bindings/csclib_generated.c` 与 `scripts/InternalCalls.cs` |
 | 手写热点 | `Joy.Draw`（矩形、线、文字、贴图）、`Joy.Input`（键鼠轮询）、`Joy.Host`（日志 / 退出） | C 实现：`modules/cs/bindings/csclib_{draw,input,host}.c`；C# 声明：`modules/cs/scripts/NativeCalls.cs` |
-| IDL 驱动（P1，并行） | `Joy.Api.Bindings` / `Diagnostics` / 强类型句柄对象，public API 无 `IntPtr` | `api/gen_bindings.js` → `bindings/api_generated.c` + `scripts/Api.generated.cs` |
+| IDL 驱动（P1/P2，三端） | 三端同名 `Joy.Api.Bindings.*`；C# 无 `IntPtr`，Lua / JS 句柄为不透明对象 | `api/gen_bindings.js` → 共享 thunk + `api_generated.c` / `lapi.c` / `japi.c` |
 | C# 程序集 | 上述几类 `public` 声明统一编入 `Joy.Bindings.dll` | `modules/cs/Joy.Bindings.csproj`（显式列出 `scripts/*.cs`） |
 
 旧链路只暴露业务实际调用的 internal call，由 `ALLOW_NAMES` 白名单控制，
@@ -319,14 +321,18 @@ Joy.Api.Bindings.*（强类型，无 IntPtr） → Joy.Api.Native.*（internal c
   → joy C API + joy_obj 句柄（finalizer 触发自动析构）
 ```
 
-`joy_thunk_entry` 带 `arg_kinds` / `ret_kind`，三端 `vm.c` 共用同一张类型契约表；
-方法名由 `naming.js` 统一生成。`csx_create()` 在旧注册入口后多调一次 `csopen_api()`，
-旧白名单胶水与 C# 业务调用点一行未改。`joy_api_selftest()` 对每条开放 API 故意传错
-`argc` 验证注册表与守卫，不执行任何业务函数；`--smoke` 会打印 `[api] selftest PASS`
-与 `[api.cs] PASS ... destroyed=1`，后者计入 `[smoke] PASS` 断言。
+`joy_thunk_entry` 带 `script_name` / `arg_kinds` / `ret_kind`，三端共用同一张类型
+契约表；方法名由 `naming.js` 统一生成。三个后端都在旧注册入口后多调一次新入口
+（`csopen_api()` / `luax_open_api()` / `jsopen_api()`），旧白名单胶水与 C# 业务
+调用点一行未改。Lua / JS 适配层遍历注册表动态注册，新增 API 不需要改后端代码。
 
-**仍未完成**：Lua / JS 的 `vm.c`、L2 结构体展开 74 条、L3 手写 229 条、
-42 条所有权待裁决、`jmath.h` 记录映射，以及旧 `Joy.*` 调用点向 `Joy.Api.*` 的迁移。
+`joy_api_selftest()` 对每条开放 API 故意传错 `argc` 验证注册表与守卫，不执行任何
+业务函数；`--smoke` 另外跑三端各自的端到端自检：
+`[api] selftest PASS` → `[api] lua selftest PASS` → `[api] js selftest PASS`
+→ `[api.cs] PASS ... destroyed=1`，后两者计入 `[smoke] PASS` 断言。
+
+**仍未完成**：L2 结构体展开 74 条、L3 手写 229 条、42 条所有权待裁决、
+`jmath.h` 记录映射，以及旧 `Joy.*` 调用点向 `Joy.Api.Bindings.*` 的迁移与旧胶水删除。
 
 ## 扩展指引
 
@@ -343,8 +349,8 @@ Joy.Api.Bindings.*（强类型，无 IntPtr） → Joy.Api.Native.*（internal c
 2. 装 Node 20 与 .NET 8（C# 运行时由 joy 子模块提供，无需安装 Mono）
 3. `node third_party/joy/api/gen_bindings.js --check` 校验 IDL 与 4 个生成物同步（不写文件）
 4. `dotnet build` 依次构建 joy 的 `Joy.Bindings.csproj` 与本仓 `JoyGame.csproj`，都输出到 `build/csharp`
-5. CMake + MSVC 构建宿主（`MODULES cs` 编入 joy 的绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
-6. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[api] selftest PASS`、`[api.cs] PASS`、`[smoke] PASS`）
+5. CMake + MSVC 构建宿主（`MODULES cs lua js` 编入 joy 的三端绑定源码；post-build 把 `Joy.Bindings.dll` 追加进 `lib/`）
+6. `joy_csharp_test_app.exe --smoke 180` 无窗口冒烟（必须 `[api] selftest PASS`、`[api] lua selftest PASS`、`[api] js selftest PASS`、`[api.cs] PASS`、`[smoke] PASS`）
 7. 上传 exe + dll + `lib/**` + assets 产物
 
 ## License

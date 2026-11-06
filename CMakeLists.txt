@@ -110,10 +110,12 @@ add_subdirectory("${JOY_SOURCE_DIR}/SDL"     "${CMAKE_BINARY_DIR}/SDL")
 include("${JOY_SOURCE_DIR}/joy_add.cmake")
 
 # ---- 宿主可执行文件 --------------------------------------------------------
-# C# 绑定层由 joy 子项目提供：MODULES cs 会把 joy/modules/cs 的源码
-# 直接编入本 target（不建库、不产 DLL），对外只暴露 joy_csharp.h。
+# 三端绑定层由 joy 子项目提供：MODULES 会把对应模块的源码直接编入本 target
+# （不建库、不产 DLL）。cs 对外只暴露 joy_csharp.h，lua / js 各暴露 joy_lua.h / joy_js.h。
+# 启用 lua / js 是为了让 Joy.Api.Bindings.* 在三个后端都有真实可跑的验证，
+# 而不是只写不编。
 add_executable(joy_csharp_test_app main.c)
-joy_add_sources(joy_csharp_test_app MODULES cs)
+joy_add_sources(joy_csharp_test_app MODULES cs lua js)
 
 # ---- joy 共享绑定运行层（P1）----------------------------------------------
 # api/ 下的运行时与生成 thunk 与后端无关，先在主仓显式编入宿主做 C 层自检；
