@@ -1,5 +1,5 @@
-# C# 绑定生成物（csclib/generated、csharp/Joy/InternalCalls.cs）归属
-# joy 子项目 third_party/joy/modules/csharp，本仓不再持有，无需 linguist 规则
+# C# 绑定生成物（modules/cs/bindings/csclib_generated.c、modules/cs/scripts/InternalCalls.cs）
+# 归属 joy 子项目，本仓不再持有，无需 linguist 规则
 
 # 文本文件统一按平台换行处理
 * text=auto

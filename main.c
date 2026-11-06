@@ -16,7 +16,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <joy/joy.h>
-/* C# 后端只通过 joy_csharp.h 交互：MODULES csharp 把 joy/modules/csharp
+/* C# 后端只通过 joy_csharp.h 交互：MODULES cs 把 joy/modules/cs
  * 的源码直接编入本 target，本仓不自带绑定层源码。 */
 #include "joy_csharp.h"
 

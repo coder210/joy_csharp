@@ -3,7 +3,7 @@
 #
 # 结构：
 #   main.c                        创建窗口 + 主循环 + 事件泵，每帧回调 C# Host.OnFrame
-#   third_party/joy/modules/csharp   joy 子项目提供的 C# 绑定模块（MODULES csharp）
+#   third_party/joy/modules/cs   joy 子项目提供的 C# 绑定模块（MODULES cs）
 #   csharp/                       C# 业务程序集 JoyGame.dll（dotnet build 产出）
 #
 # 用法（在仓库根目录，joy 默认取仓内子模块 third_party/joy）：
@@ -110,10 +110,10 @@ add_subdirectory("${JOY_SOURCE_DIR}/SDL"     "${CMAKE_BINARY_DIR}/SDL")
 include("${JOY_SOURCE_DIR}/joy_add.cmake")
 
 # ---- 宿主可执行文件 --------------------------------------------------------
-# C# 绑定层由 joy 子项目提供：MODULES csharp 会把 joy/modules/csharp 的源码
+# C# 绑定层由 joy 子项目提供：MODULES cs 会把 joy/modules/cs 的源码
 # 直接编入本 target（不建库、不产 DLL），对外只暴露 joy_csharp.h。
 add_executable(joy_csharp_test_app main.c)
-joy_add_sources(joy_csharp_test_app MODULES csharp)
+joy_add_sources(joy_csharp_test_app MODULES cs)
 
 # ---- Visual Studio：把 C# 工程一并挂进生成的解决方案 -----------------------
 # 仅 VS 生成器生效，其它生成器忽略。C# 仍由 dotnet build 产出 JoyGame.dll，
@@ -132,7 +132,7 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
     # Joy.Bindings 只是 JoyGame 的 ProjectReference，MSBuild 会隐式构建它，
     # 但不会把它列进解决方案，VS 解决方案资源管理器里看不到、也没有项目上下文。
     # 显式挂进来才能在 VS 里浏览绑定源码，并让「生成解决方案」先构建它。
-    # 路径由 joy 的 csharp 模块 CMakeLists 导出，主仓不再硬编码模块内部目录
+    # 路径由 joy 的 cs 模块 CMakeLists 导出，主仓不再硬编码模块内部目录
     set(_joy_bindings_csproj "${JOY_BINDINGS_CSPROJ}")
     if(EXISTS "${_joy_bindings_csproj}")
         include_external_msproject(
@@ -192,7 +192,7 @@ if(EXISTS "${JOY_BINDINGS_DLL}")
 else()
     message(WARNING
         "未找到 Joy.Bindings.dll（${JOY_BINDINGS_DLL}）：JoyGame.dll 依赖它，先执行 "
-        "dotnet build third_party/joy/modules/csharp/Joy.Bindings.csproj -c Release -o build/csharp")
+        "dotnet build third_party/joy/modules/cs/Joy.Bindings.csproj -c Release -o build/csharp")
 endif()
 
 # ---- 冒烟测试 --------------------------------------------------------------
