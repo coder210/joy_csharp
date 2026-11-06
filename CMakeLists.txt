@@ -115,6 +115,15 @@ include("${JOY_SOURCE_DIR}/joy_add.cmake")
 add_executable(joy_csharp_test_app main.c)
 joy_add_sources(joy_csharp_test_app MODULES cs)
 
+# ---- joy 共享绑定运行层（P1）----------------------------------------------
+# api/ 下的运行时与生成 thunk 与后端无关，先在主仓显式编入宿主做 C 层自检；
+# 等三个后端都接上后由 joy_add.cmake 统一装配。生成物 thunks_generated.c 入库，
+# 由 api/gen_bindings.js --check 保证与 joy.idl 同步。
+target_sources(joy_csharp_test_app PRIVATE
+    "${JOY_SOURCE_DIR}/api/runtime/joy_value.c"
+    "${JOY_SOURCE_DIR}/api/runtime/joy_obj.c"
+    "${JOY_SOURCE_DIR}/api/thunks_generated.c")
+
 # ---- Visual Studio：把 C# 工程一并挂进生成的解决方案 -----------------------
 # 仅 VS 生成器生效，其它生成器忽略。C# 仍由 dotnet build 产出 JoyGame.dll，
 # 这里只为在 VS 里同时浏览 / 生成 C# 业务代码，不改变 cmake --build 的行为。

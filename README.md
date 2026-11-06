@@ -304,6 +304,10 @@ node third_party/joy/api/gen_bindings.js --check    # CI 校验，不写文件
 任何会被调用的胶水代码**，现有 `modules/*/bindings/` 与宿主构建行为不变。
 字段含义、分级与三种常见操作见 [`third_party/joy/api/README.md`](third_party/joy/api/README.md)。
 
+P1 已落地共享 C 运行层（统一值容器、句柄表、自动析构）与 IDL 驱动的 thunk 生成器；
+首批只开放 4 条零副作用 API，宿主 `--smoke` 会打印 `[api] selftest PASS`。
+这套 API 目前只在 C 层自检可见，三个脚本后端尚未接入，业务代码与现有胶水未改动。
+
 ## 扩展指引
 
 - **加一个场景**：实现 `runtime/IScene.cs` 的 `IScene`（`Enter/Update/Render`），在 `game/` 下新建场景并用 `app.ChangeScene(...)` 切换。

@@ -19,6 +19,8 @@
 /* C# 后端只通过 joy_csharp.h 交互：MODULES cs 把 joy/modules/cs
  * 的源码直接编入本 target，本仓不自带绑定层源码。 */
 #include "joy_csharp.h"
+/* 共享绑定运行层（joy/api）：只在冒烟时跑 C 层自检，不改变业务链路。 */
+#include <joy/api/joy_api.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,6 +100,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
         if (i >= 0 && i + 1 < argc) g_assembly = argv[i + 1];
 
         if (g_smoke_frames > 0) {
+                /* P1：共享绑定运行层自检（值容器 / 句柄 / 类型校验 / 自动释放）。
+                 * 只跑纯内存的 lcg / ticks API，依赖 joy.idl 里 status:on 的条目。 */
+                const char* api_err = joy_api_selftest();
+                if (api_err) {
+                        fprintf(stderr, "[api] selftest FAILED: %s\n", api_err);
+                        return SDL_APP_FAILURE;
+                }
+                printf("[api] selftest PASS\n");
+                fflush(stdout);
                 /* CI 无桌面会话：dummy 视频 + 软件渲染，保证 CreateWindow/Renderer 可用。
                  * 冒烟不限制迭代速率，让固定步长的 N 帧尽快跑完。 */
                 SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
