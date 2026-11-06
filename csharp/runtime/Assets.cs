@@ -8,15 +8,15 @@ namespace JoyGame
     /// </summary>
     internal sealed class Assets
     {
-        // 模板自带的 ARIALNB.TTF 只有拉丁字形，中文码点查不到字形会落到 .notdef，
-        // 渲染成豆腐块/乱码。底层 jfont.c 用 stbtt_InitFont(data, 0)，只稳妥支持
-        // TrueType glyf 轮廓的单字体 .ttf，不要放 .ttc 字体集合或 CFF 轮廓的 .otf。
-        // 仓库不附带二进制字体：想固定用某套中文字体，把它放到 CJK.ttf 即可。
-        private const string FallbackFont = "assets/fonts/ARIALNB.TTF";
+        // 仓内只保留含中文字形的字体。早先随模板分发的 ARIALNB.TTF 及 Arial 系列变体
+        // 只有拉丁字形，中文码点查不到字形会落到 .notdef，渲染成豆腐块/乱码，已全部移除。
+        // 底层 jfont.c 用 stbtt_InitFont(data, 0)，只稳妥支持 TrueType glyf 轮廓的
+        // 单字体 .ttf，不要放 .ttc 字体集合或 CFF 轮廓的 .otf。
+        // simsunb.ttf 是宋体扩展汉字补充，不保证覆盖常用字，故不列入 UI 字体候选。
         private static readonly string[] CjkFonts =
         {
-            "assets/fonts/CJK.ttf",
-            "C:/Windows/Fonts/simhei.ttf",
+            "assets/fonts/simhei.ttf",       // 仓内自带黑体，首选（模板自包含）
+            "C:/Windows/Fonts/simhei.ttf",   // 系统兜底
             "C:/Windows/Fonts/Deng.ttf",
         };
 
@@ -25,7 +25,7 @@ namespace JoyGame
         public IntPtr FontSmall { get; private set; }
         public IntPtr FontBig { get; private set; }
 
-        /// <summary>当前字体是否含中文字形；界面文案据此选择中文或 ASCII 兜底。</summary>
+        /// <summary>是否成功加载到含中文字形的字体；界面文案据此选择中文或 ASCII 兜底。</summary>
         public bool HasCjkFont { get; private set; }
 
         public float PlayerW { get; private set; }
@@ -48,11 +48,6 @@ namespace JoyGame
                 FontBig = Joy.Font.font_create(path, 22);
                 HasCjkFont = true;
                 break;
-            }
-            if (FontSmall == IntPtr.Zero)
-            {
-                FontSmall = Joy.Font.font_create(FallbackFont, 12);
-                FontBig = Joy.Font.font_create(FallbackFont, 22);
             }
 
             PlayerW = PlayerImage != IntPtr.Zero ? Joy.Draw.image_width(PlayerImage) : 16f;

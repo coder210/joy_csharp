@@ -235,26 +235,26 @@ C# 代码没有项目上下文；这时可另外打开 `csharp/JoyGame.csproj`�
 
 底层文字渲染是支持 Unicode 的：`text_createx()` 先用 `utf8_decode_all` 把 UTF-8
 解成 codepoint，再用 `stbtt_GetCodepointHMetrics` / `stbtt_MakeCodepointBitmap`
-按码点取字形。但模板自带的 `assets/fonts/ARIALNB.TTF`（Arial Narrow Bold）只有
-拉丁字形，中文码点查不到字形会落到 `.notdef`，界面就成了豆腐块 / 乱码——**问题在
-字体文件，不在编码管线**。
+按码点取字形。所以中文能否显示只取决于字体有没有 CJK 字形——早先随模板分发的
+`ARIALNB.TTF`（Arial Narrow Bold）只有拉丁字形，中文码点会落到 `.notdef` 变豆腐块。
+这类不支持中文的字体（Arial / Arial Narrow 共 9 个变体）已全部移除。
 
-`Assets.Load` 按顺序尝试含 CJK 字形的字体，命中后用同一路径建 12 / 22 两个字号：
+`assets/fonts/` 现在只保留含中文字形的 TTF：
 
-| 顺序 | 路径 | 说明 |
-|---|---|---|
-| 1 | `assets/fonts/CJK.ttf` | 自备字体（推荐放这里），仓库不附带二进制字体 |
-| 2 | `C:/Windows/Fonts/simhei.ttf` | Windows 自带黑体（纯 TTF，约 9.7 MB） |
-| 3 | `C:/Windows/Fonts/Deng.ttf` | Windows 等线 |
-| 回退 | `assets/fonts/ARIALNB.TTF` | 仅拉丁字形 |
+| 文件 | 说明 |
+|---|---|
+| `simhei.ttf` | 黑体，覆盖简体中文常用字，UI 主字体（约 9.3 MB） |
+| `simsunb.ttf` | 宋体扩展汉字补充（约 20.9 MB），不保证覆盖常用字，不作为 UI 字体候选 |
 
-裁剪后的 BCL 没有 `File.Exists`，所以靠 `font_create` 返回 `IntPtr.Zero` 判断候选是否可用。
-只有命中 CJK 字体时 `Assets.HasCjkFont` 才为 true，界面显示中文；否则文案经
-`runtime/Texts.cs` 的 `Texts.Pick` 降级为纯 ASCII，保证任何环境都不乱码。
+`Assets.Load` 按顺序尝试 `assets/fonts/simhei.ttf` → `C:/Windows/Fonts/simhei.ttf` →
+`C:/Windows/Fonts/Deng.ttf`，命中即用同一路径建 12 / 22 两个字号。裁剪后的 BCL 没有
+`File.Exists`，靠 `font_create` 返回 `IntPtr.Zero` 判断候选是否可用。三个候选都含
+CJK 字形，正常环境下界面始终显示中文；`runtime/Texts.cs` 的 `Texts.Pick` 仍保留
+ASCII 降级分支，以便将来换回非 CJK 字体时不会乱码。
 
-想固定用某套中文字体，把它的 TTF 放到第一条路径即可。请用 TrueType `glyf` 轮廓的
-单字体 `.ttf`，不要用 `.ttc` 字体集合或 CFF 轮廓的 `.otf`——`jfont.c` 用
-`stbtt_InitFont(data, 0)`，对这两类支持有限。
+想换字体：替换 `simhei.ttf`，或改 `csharp/runtime/Assets.cs` 里的 `CjkFonts` 顺序。
+请用 TrueType `glyf` 轮廓的单字体 `.ttf`，不要用 `.ttc` 字体集合或 CFF 轮廓的
+`.otf`——`jfont.c` 用 `stbtt_InitFont(data, 0)`，对这两类支持有限。
 
 ## 绑定体系
 
