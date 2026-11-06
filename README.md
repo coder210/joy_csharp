@@ -293,23 +293,25 @@ node third_party/joy/modules/cs/gen_csclib.js
 
 绘制为什么还要手写一层：`image_draw1` / `jtext_printx` 这类 API 走的是结构体指针 + 颜色结构体，C# 侧传 `ref` 既啰嗦又容易踩 ABI 坑；扁平成 `float/int/string` 后业务代码更好写。
 
-## 绑定 API 契约（P0 / P1）
+## 绑定 API 契约（P0 / P1 / P2）
 
 joy 子项目的 `api/` 放一份与脚本语言无关的接口清单，让 Lua / JS / C# 三个后端
 共用同一套对象模型与所有权规则：
 
 ```powershell
-node third_party/joy/api/gen_bindings.js            # 重生成全部 4 个生成物
-node third_party/joy/api/gen_bindings.js --scan     # 从 joy.h 更新 joy.idl
-node third_party/joy/api/gen_bindings.js --check    # CI 校验，不写文件
+node third_party/joy/api/gen_bindings.js             # 重生成全部 4 个生成物
+node third_party/joy/api/gen_bindings.js --enable L1  # 按级别批量开放（逐条过闸）
+node third_party/joy/api/gen_bindings.js --scan       # 从 joy.h 更新 joy.idl
+node third_party/joy/api/gen_bindings.js --check      # CI 校验，不写文件
 ```
 
 `joy.idl`（每条 API 一行、人工可改）与 4 个生成物都入库；`--scan` 只刷新自动字段，
-保留 `status` / `owns` / `note`。默认 935 条全部 `status: off`，验证过一条才开放。
-字段含义、分级与三种常见操作见 [`third_party/joy/api/README.md`](third_party/joy/api/README.md)。
+保留 `status` / `owns` / `note`。当前 935 条里开放 446 条，`--enable` 只放行通过
+类型、所有权与缓冲校验的条目，跳过原因逐条打印，`git diff` 可审查。
+字段含义、分级与操作见 [`third_party/joy/api/README.md`](third_party/joy/api/README.md)。
 
-P1 已落地共享 C 运行层（统一值容器、句柄表、自动析构）、IDL 驱动的 thunk 生成器，
-以及 **cs 后端薄适配**：
+共享 C 运行层（统一值容器、句柄表、自动析构）、IDL 驱动的 thunk 生成器，
+以及 **cs 后端薄适配**已落地：
 
 ```text
 Joy.Api.Bindings.*（强类型，无 IntPtr） → Joy.Api.Native.*（internal call）
@@ -317,10 +319,14 @@ Joy.Api.Bindings.*（强类型，无 IntPtr） → Joy.Api.Native.*（internal c
   → joy C API + joy_obj 句柄（finalizer 触发自动析构）
 ```
 
-首批只开放 4 条零副作用 API。`csx_create()` 在旧注册入口后多调一次 `csopen_api()`，
-旧白名单胶水与 C# 业务调用点一行未改。`--smoke` 会打印 `[api] selftest PASS`
-（C 层）与 `[api.cs] PASS ... destroyed=1`（C# 层，计入 `[smoke] PASS` 断言）。
-Lua / JS 后端尚未接 `vm.c`，L2 / L3 / X 与 `jmath.h` 仍留待后续阶段。
+`joy_thunk_entry` 带 `arg_kinds` / `ret_kind`，三端 `vm.c` 共用同一张类型契约表；
+方法名由 `naming.js` 统一生成。`csx_create()` 在旧注册入口后多调一次 `csopen_api()`，
+旧白名单胶水与 C# 业务调用点一行未改。`joy_api_selftest()` 对每条开放 API 故意传错
+`argc` 验证注册表与守卫，不执行任何业务函数；`--smoke` 会打印 `[api] selftest PASS`
+与 `[api.cs] PASS ... destroyed=1`，后者计入 `[smoke] PASS` 断言。
+
+**仍未完成**：Lua / JS 的 `vm.c`、L2 结构体展开 74 条、L3 手写 229 条、
+42 条所有权待裁决、`jmath.h` 记录映射，以及旧 `Joy.*` 调用点向 `Joy.Api.*` 的迁移。
 
 ## 扩展指引
 
