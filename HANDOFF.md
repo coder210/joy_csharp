@@ -1,9 +1,10 @@
 # 交接文档：joy 统一绑定层（IDL → 共享 C 运行层 → 三端薄适配）
 
 > 生成：2026-11-07 · 工作区 `e:/c++/joy_csharp_test` · Windows / PowerShell / MSVC / .NET SDK 9 / Node 20
-> 接手时状态：主仓 `main` @ `8516ba4`，子模块 `third_party/joy` `main` @ `00a85c42`，gitlink 对齐。
-> 2026-11-07 更新：完成 P2-B 数据质量一刀 + P2-A 的 `checkbox` 域 L2 试点
-> （见第 5 / 8 节），两仓有尚未提交的改动。
+> 当前状态：主仓 `main` @ `97a4f50`，子模块 `third_party/joy` `main` @ `aca785a`，
+> gitlink 对齐，两仓均已推送；接手时为 `8516ba4` / `00a85c42`。
+> 2026-11-07 更新：P2-B 数据质量一刀 + P2-A 的 `checkbox` 域 L2 试点已完成、提交并推送；
+> P4 前提诊断与真实调用验证见第 0 / 8 节（主仓有尚未提交的改动）。
 > **权威细节在 `third_party/joy/api/README.md`；本文是接手导航，不替代它。**
 
 ---
@@ -19,13 +20,14 @@ C 层创建的内存自动释放；同时要求生成器出错概率可控、后
 | 三端用法一致、同名同参数、句柄自动释放 | **已达成并实测** |
 | 出错概率可控（默认关闭、分级、CI 门禁、生成物入库） | **已达成** |
 | 覆盖面 | **448 / 935 = 47.9%**，未达成「绝大多数」 |
-| 旧业务调用点迁移、删除旧胶水 | **未开始** |
+| 旧业务调用点迁移、删除旧胶水 | **前提缺口已查明，仍不能 1:1 迁移（见第 8 节 P4）** |
 | L2 试点（`checkbox` 域 2 条） | **已打通，剩 72 条 L2** |
 | L3 / X、`jmath.h` | **未处理** |
 
 **不要把「三端接通」误读成「目标完成」**：管道通了，覆盖面还差一半多。
 另外，448 条里只有 4 条（`GetTicks` / `JtextCacheGetCount` / `LcgRandomCreate` /
-`LcgRandomNext`）在三端验证过完整运行时语义；其余 444 条只验证「注册成功 + argc
+`LcgRandomNext`）在三端验证过完整运行时语义，另有 2 条（`JpmWaveSeed` /
+`Murmur3Hash`）在 C# 端验证过真实返回值；其余 442 条只验证「注册成功 + argc
 守卫生效」（其中 2 条 L2 另有「展开参数个数 + 类型守卫」专项自检），这是刻意保留的边界。
 
 ---
@@ -263,12 +265,12 @@ L3 的 229 条成因：`非不透明指针 / 输出参数` 98、`未知类型需
 1. node third_party/joy/api/gen_bindings.js --check          → "check OK: 935 IDL entries ..."
 2. dotnet build Joy.Bindings.csproj -c Release -o build/csharp → 0 warning / 0 error
 3. dotnet build csharp/JoyGame.csproj -c Release -o build/csharp → 0 warning / 0 error
-4. cmake --build build/app --config Release --parallel      → 0 error；新增 .c 不应产生 C4090 等告警
+4. cmake --build build --config Release --parallel          → 0 error；新增 .c 不应产生 C4090 等告警
 5. --smoke 180（dummy 驱动）→ exit 0 且必须同时出现：
       [api] selftest PASS
       [api] lua selftest PASS
       [api] js selftest PASS
-      [api.cs] PASS ... destroyed=1
+      [api.cs] PASS ... destroyed=1 real=True opaque=True
       [smoke] PASS api=True abi=True play=2 ...
 6. CI 门禁篡改测试（可选但建议）：手改任一生成物 → --check 必须失败；恢复后必须通过
 7. git status 两仓 + gitlink 对齐；分别 push
@@ -279,6 +281,9 @@ thunk 第一行就返回，**不执行任何 joy 业务函数**，因此批量�
 API 不会在自检里被真的调用。别把这个机制改成「真的调用每条 API」。
 对开放的 L2 试点条目，另用「展开后的正确 argc + 全 `JOY_V_NULL` 参数」调一次，
 期望 `JOY_ERR_TYPE`：验证展开序列与 `arg_kinds[]` 生效，同样不执行业务函数。
+C# 侧的 `ApiBindingSmoke` 另做两类真实断言：调用 `JpmWaveSeed` / `Murmur3Hash`
+校验返回值，以及反射确认 public API 无 `IntPtr`；它们并入 `[api.cs] PASS` 与
+`[smoke] PASS`，是「真实调用语义」与「argc 守卫」的分界线。
 
 ---
 
@@ -318,9 +323,28 @@ r,g,b,a, ...)` 共 13 个值），不是单个对象，参数个数与 `joy.h` �
 按第 5 节成因分类手写 thunk：输出参数 98 条最有希望做成通用模式；
 回调 8 条、varargs 4 条、数组 5 条建议逐个人工处理。
 
-**P4：业务收尾**
+**P4：业务收尾（前提缺口已查明，暂不能 1:1 迁移）**
 把约 39 处旧 `Joy.*` C# 调用点迁到 `Joy.Api.Bindings.*`，确认 public API 再无 `IntPtr`，
 再删约 70 个旧胶水 `.c` 文件（这一步之前别删，新旧并行是安全网）。
+
+2026-11-07 核对结论：**旧胶水是 cs 模块私有 internal call（`Joy.Draw` / `Input` /
+`Host` / `Image` / `Font`），与 `joy.h` 导出的 `JOY_API` 不是同一组函数**。现有 448 条里
+没有与之同名或签名等价的替代品：绘制 / 图像 / 字体类多数仍是 `status:off` 或 L3；
+`Joy.Host.log` / `set_exit_code` / `quit` 是宿主回调，压根没有对应 JOY_API；业务层还
+持有 `IntPtr`（如 `Assets.cs` 的 `app.R2d` / `Font`），缺少到 `Jr2d` 等强类型句柄的
+public 转换入口。所以 P4 不是「换名」，而是「先补能力、再重写调用点」：
+
+1. 按业务实际需要点名开放对应 API / 为 L3 手写 thunk（给 P2-B、P3 具体输入）。
+2. 补 `IntPtr` → 强类型句柄的 public 转换，或让业务从窗口 / r2d 创建起全程用新链路对象。
+3. 逐处替换调用点，旧胶水留作安全网，跑完第 7 节清单后再删。
+
+本刀已完成两个前置检查（`csharp/test/ApiBindingSmoke.cs`）：
+- `CheckRealCalls()` 真正调用 `JpmWaveSeed(12345, 2)` 断言精确值 2012351、
+  `Murmur3Hash` 断言确定性 / 区分性 / 非 0；这是 C# 端首次验证已开放 L0 API 的
+  真实返回值（此前只有 argc 守卫）。
+- `PublicApiHasNoRawPointers()` 反射遍历 `Joy.Api.Bindings` 的 public static 方法，
+  断言参数 / 返回类型里没有 `IntPtr`。
+`--smoke 180` 输出 `[api.cs] PASS ... real=True opaque=True`，两项并入 `[smoke] PASS`。
 
 **P5：`jmath.h`**
 1756 行、134 个 `JOY_INLINE`、10 个 `typedef struct`，没有 `JOY_API`；

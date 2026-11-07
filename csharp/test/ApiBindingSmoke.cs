@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 
 namespace JoyGame
 {
@@ -22,6 +23,37 @@ namespace JoyGame
             if (a == b) throw new InvalidOperationException("lcg_random_next returned identical values");
         }
 
+        /* 真正调用已开放的 L0 API 并校验返回值，而不只是「注册成功 + argc 守卫」。
+         * 两条都是纯标量、无句柄、无窗口上下文，可在 dummy 驱动下稳定复现。 */
+        private static bool CheckRealCalls()
+        {
+            // jpm_wave_seed(base, wave) = base + wave * 1000003（jprocmap.c:285）
+            uint seed = Joy.Api.Bindings.JpmWaveSeed(12345u, 2);
+            bool seedOk = seed == 2012351u;
+
+            ulong h1 = Joy.Api.Bindings.Murmur3Hash("joy");
+            ulong h2 = Joy.Api.Bindings.Murmur3Hash("joy");
+            ulong h3 = Joy.Api.Bindings.Murmur3Hash("Joy");
+            bool hashOk = h1 != 0 && h1 == h2 && h1 != h3;
+
+            return seedOk && hashOk;
+        }
+
+        /* P4 前置检查：新链路 public 入口不能把 IntPtr / 裸句柄暴露给业务层。 */
+        private static bool PublicApiHasNoRawPointers()
+        {
+            foreach (MethodInfo m in typeof(Joy.Api.Bindings).GetMethods(
+                BindingFlags.Public | BindingFlags.Static))
+            {
+                if (m.ReturnType == typeof(IntPtr)) return false;
+                foreach (ParameterInfo p in m.GetParameters())
+                {
+                    if (p.ParameterType == typeof(IntPtr)) return false;
+                }
+            }
+            return true;
+        }
+
         internal static void Run()
         {
             try
@@ -42,12 +74,18 @@ namespace JoyGame
                 uint liveNow = Joy.Api.Diagnostics.LiveCount;
                 uint deadNow = Joy.Api.Diagnostics.DestroyCount;
 
+                bool realOk = CheckRealCalls();
+                bool opaqueOk = PublicApiHasNoRawPointers();
+
                 Passed = liveAfter == live0 + 1
                       && liveNow == live0
-                      && deadNow == dead0 + 1;
+                      && deadNow == dead0 + 1
+                      && realOk
+                      && opaqueOk;
                 Detail = "ticks=" + ticks + " cache=" + cached
                        + " live=" + live0 + "->" + liveAfter + "->" + liveNow
-                       + " destroyed=" + (deadNow - dead0);
+                       + " destroyed=" + (deadNow - dead0)
+                       + " real=" + realOk + " opaque=" + opaqueOk;
                 Joy.Host.log("[api.cs] " + (Passed ? "PASS " : "FAIL ") + Detail);
             }
             catch (Exception ex)
