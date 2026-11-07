@@ -1,8 +1,9 @@
 # 交接文档：joy 统一绑定层（IDL → 共享 C 运行层 → 三端薄适配）
 
-> 生成：2026-11-07 · 工作区 `d:/github/joy_csharp_test` · Windows / PowerShell / MSVC / .NET 8 / Node 20
-> 接手时状态：主仓 `main` @ `3bc157c`，子模块 `third_party/joy` `main` @ `00a85c42`，
-> gitlink 对齐，两仓工作区干净且已推送到 origin。
+> 生成：2026-11-07 · 工作区 `e:/c++/joy_csharp_test` · Windows / PowerShell / MSVC / .NET SDK 9 / Node 20
+> 接手时状态：主仓 `main` @ `8516ba4`，子模块 `third_party/joy` `main` @ `00a85c42`，gitlink 对齐。
+> 2026-11-07 更新：完成 P2-B 数据质量一刀 + P2-A 的 `checkbox` 域 L2 试点
+> （见第 5 / 8 节），两仓有尚未提交的改动。
 > **权威细节在 `third_party/joy/api/README.md`；本文是接手导航，不替代它。**
 
 ---
@@ -17,14 +18,15 @@ C 层创建的内存自动释放；同时要求生成器出错概率可控、后
 |---|---|
 | 三端用法一致、同名同参数、句柄自动释放 | **已达成并实测** |
 | 出错概率可控（默认关闭、分级、CI 门禁、生成物入库） | **已达成** |
-| 覆盖面 | **446 / 935 = 47.7%**，未达成「绝大多数」 |
+| 覆盖面 | **448 / 935 = 47.9%**，未达成「绝大多数」 |
 | 旧业务调用点迁移、删除旧胶水 | **未开始** |
-| L2 / L3 / X、`jmath.h` | **未处理** |
+| L2 试点（`checkbox` 域 2 条） | **已打通，剩 72 条 L2** |
+| L3 / X、`jmath.h` | **未处理** |
 
 **不要把「三端接通」误读成「目标完成」**：管道通了，覆盖面还差一半多。
-另外，446 条里只有 4 条（`GetTicks` / `JtextCacheGetCount` / `LcgRandomCreate` /
-`LcgRandomNext`）在三端验证过完整运行时语义；其余 442 条只验证「注册成功 + argc
-守卫生效」，这是刻意保留的边界。
+另外，448 条里只有 4 条（`GetTicks` / `JtextCacheGetCount` / `LcgRandomCreate` /
+`LcgRandomNext`）在三端验证过完整运行时语义；其余 444 条只验证「注册成功 + argc
+守卫生效」（其中 2 条 L2 另有「展开参数个数 + 类型守卫」专项自检），这是刻意保留的边界。
 
 ---
 
@@ -162,27 +164,35 @@ Pop-Location
 | 项 | 数量 |
 |---|---|
 | `joy.h` 的 `JOY_API` 声明 / IDL 条目 | 935 |
-| 已开放 `status: on` | **446** |
+| 已开放 `status: on` | **448**（含 L2 试点 2 条） |
 | L0 / L1 / L2 / L3 / X | 44 / 538 / 74 / 229 / 50 |
-| 所有权待裁决（`ownsIssue`） | 42 |
-| 缺 `owns` | 1 |
+| 所有权待裁决（`ownsIssue`） | 38 |
+| 缺 `owns` | 38 |
 | orphan | 0 |
 | `joy.h` 中值类型 `typedef struct` | 48 |
 
-剩余 489 条的分解（复现 `canOpen` 统计）：
+两个 38 是同一批条目：P2-B 数据质量一刀把 42 条错误推断逐条裁决完，
+4 条补上合规 dtor（`create_window` / `simple_fps_create` / `r2d_wrap` /
+`jtilemap_load_file_json`），其余 38 条确认没有可通过硬校验的单参数 dtor，
+`owns` 置空、结论写进 `joy.idl` 的 `note`，并显示在 `coverage.md` 两张待办表里。
+
+剩余 487 条的分解（复现 `canOpen` 统计）：
 
 | 原因 | 数量 |
 |---|---|
-| 非 L0/L1（= L2 74 + L3 229 + X 50） | 353 |
-| 返回句柄、批量模式需人工确认所有权 | 49 |
-| `void*` 缓冲参数需手写适配 | 30 |
-| `owns` 目标不是单参数 | 23 |
-| `owns` 类型不匹配 | 15 |
+| 非 L0/L1（= L2 72 + L3 229 + X 50） | 351 |
+| 返回句柄、批量模式需人工确认所有权 | 52 |
+| 返回句柄但缺合规 `owns`（已人工裁决，见 `note`） | 36 |
+| `void*` 缓冲参数需手写适配 | 31 |
 | 返回 `char*`、所有权未标注 | 12 |
 | 不支持的返回类型（枚举 / `fp_t` 等） | 5 |
-| 返回句柄但缺 `owns` / `owns` 参数非句柄 | 2 |
-| **合计** | **489** |
+| **合计** | **487** |
 
+L2 试点开放了 `checkbox_set_colors` / `checkbox_set_text_color` 两条（原本属
+「非 L0/L1」），其余 72 条 L2 仍未开放；`--enable all` 仍只含 L0/L1，L2 必须
+`name:` 逐条点名。改掉错误 `owns` 推断后，原来的「`owns` 目标不是单参数 23 /
+类型不匹配 15 / 缺 `owns` 2」三类合并成「缺合规 `owns` 36」；4 条修好的条目
+落到了后面几道闸门。
 L3 的 229 条成因：`非不透明指针 / 输出参数` 98、`未知类型需人工标注` 46、
 `结构体指针参数` 35、`结构体按值返回` 23、`非 const char* 输出缓冲` 10、
 `函数指针 / 回调` 8、`数组参数` 5、`可变参数` 4。
@@ -196,6 +206,9 @@ L3 的 229 条成因：`非不透明指针 / 输出参数` 98、`未知类型需
 - `collectStructs()` 必须同时读 `joy.h` 和 `jmath.h`，否则 `vec2_t` 等被误判为 L3。
 - `get_ticks` / `find_*` 这类通用动词开头的名字，domain 要用第二段（`GENERIC_FIRST`）。
 - Windows CRLF：`--check` 比较前必须 `normEol()`，已验证模拟 CRLF checkout 通过且能抓到真实 diff。
+- L2 展开试点：结构体重组必须按**字段名**赋值，不能按偏移 `memcpy`（padding 未知）；
+  局部变量用 `= { 0 }` 初始化，否则漏字段会带脏值。`argc` / `arg_kinds[]` 一律用展开后
+  的序列，三端适配层才能自动跟随，不必改 `lapi.c` / `japi.c`。
 
 **所有权**
 - 早期只校验「`owns` 是单指针」不够：L1 里 39 条把 `void*` 配给 `jwindow_p` 的
@@ -204,6 +217,16 @@ L3 的 229 条成因：`非不透明指针 / 输出参数` 98、`未知类型需
 - 已实测：把 `get_raw_window` 强行设 `on`，门禁报「所有权不可信」并拒绝生成。
 - `get_*` / `wrap_*` 可能返回**借用指针**，类型匹配也不代表可以自动释放；批量模式
   一律跳过返回句柄的条目，只能 `name:` 点名。
+- `inferOwns()` 曾有两个系统性错判：`name.replace(/_create[\s\S]*$/, ...)` 对不含
+  `_create` 的名字是恒等变换，`owns` 会填成自己；`domain_destroy` 兜底又把
+  `r3d_destroy(jr3d_p)` 套到返回 `void*` 的 GPU 对象上。现在推断时就用
+  `ownsIssue()` 的同一套硬校验过滤候选。
+- **`--scan` 永不覆盖 `owns` / `status` / `note`**（`mergeIdl()` 视其为人工字段）：
+  修生成器只影响今后新增 API 的初值，已有错误必须逐条改 `joy.idl` 再重生成。
+- 借用指针能通过类型校验但不能自动释放：`scene_node_destroy(scene_node_p)`、
+  `scene_destroy(scene_p)` 对 `scene_find_node_by_name` /
+  `scene_manager_get_current` 类型完全匹配，填上去就是双重释放，已逐条核对实现并留
+  `owns:null`。
 
 **C# / Mono**
 - `void` 返回不要声明未使用的 `joy_value_t r`（MSVC 告警）。
@@ -254,28 +277,42 @@ L3 的 229 条成因：`非不透明指针 / 输出参数` 98、`未知类型需
 `joy_api_selftest()` 对每条开放 API 故意传错 `argc` 调一次 `joy_api_call()`：
 thunk 第一行就返回，**不执行任何 joy 业务函数**，因此批量开放有副作用 / 需要上下文的
 API 不会在自检里被真的调用。别把这个机制改成「真的调用每条 API」。
+对开放的 L2 试点条目，另用「展开后的正确 argc + 全 `JOY_V_NULL` 参数」调一次，
+期望 `JOY_ERR_TYPE`：验证展开序列与 `arg_kinds[]` 生效，同样不执行业务函数。
 
 ---
 
 ## 8. 未完成工作与建议顺序
 
-> 以下都是**建议，尚未实施**；动手前先跟用户确认优先级。
+> 除标注「已完成」的条目外都是**建议，尚未实施**；动手前先跟用户确认优先级。
 
-**P2-A：L2 结构体按值展开（+74 条 → 55.6%，且绘制/数学类 API 最需要）**
-需要动的文件与思路：
-- `runtime/joy_value.*`：目前没有记录类型。二选一：(A) 增加 `JOY_V_RECORD`（字节块 +
-  `sizeof` 静态断言）；(B) 把结构体展开成多个标量参数，脚本侧仍传一个对象。
-- `runtime/joy_thunk.h`：`joy_thunk_entry` 增加字段 schema（字段 kind、偏移、结构 tag）。
-- `gen_bindings.js`：`classify()` 已有 `collectStructs()`（48 个 typedef struct），
-  但 `check()` / `canOpen()` 目前硬拒绝 L2；`--enable` 的 `all` 也只含 L0/L1。
-- `emit_thunks.js` / `emit_cs.js`：新增 L2 分支。
-- `lapi.c` / `japi.c` / C# 包装：结构体对象 ↔ `joy_value` 的转换。
-- 务必保留「生成 ≠ 启用」：先用一个小域试点，跑完第 7 节清单再批量放。
+**P2-A：L2 结构体按值展开（试点 2 条已完成，剩 72 条；绘制/数学类 API 最需要）**
+试点已落地（`checkbox` 域 `jcolor_t`）：新增 `api/structs.js` 统一解析值类型布局，
+`gen_bindings.js` / `emit_thunks.js` / `emit_cs.js` 共用；POD 结构体参数按字段展开成
+标量序列，thunk 里按字段名重新组装 C 结构体。`--enable all` 仍只含 L0/L1，L2 必须
+`name:` 点名；`check()` / `buildThunks()` / `canThunk()` / `canEmitCs()` 只放行
+「字段全是已知标量」的可展开 L2，返回句柄的 L2 也暂不支持。
 
-**P2-B：136 条被闸门跳过的条目**
-按原因分批处理：42 条所有权待裁决（人工判定拥有 vs 借用）、12 条 `char*` 返回
-（标注谁 free）、30 条 `void*` 缓冲、23+15+2 条 owns 签名、5 条未知返回类型、
-49 条返回句柄（确认所有权后 `name:` 点名）。每条都要补 `note` 并跑验证。
+**已知偏离**：试点阶段脚本侧传的是展开后的标量序列（如 `CheckboxSetColors(cb,
+r,g,b,a, ...)` 共 13 个值），不是单个对象，参数个数与 `joy.h` 不一致；三端仍同名、
+同顺序、同类型。要回到「脚本传一个对象」需下一刀做记录类型：
+
+- `runtime/joy_value.*`：增加 `JOY_V_RECORD`（字节块 + `sizeof` 静态断言）。
+- `runtime/joy_thunk.h`：`joy_thunk_entry` 增加字段 schema（字段 kind、偏移、结构 tag），
+  并同步改 `emit_thunks.js` 的 `s_thunks[]` 初始化。
+- `lapi.c` / `japi.c` / C# 包装：结构体对象 ↔ `joy_value` 记录的转换。
+- 其余 72 条 L2 还有 `vec2_t` / `vec3_t` 等（`jmath.h`，`ft_t` 未进映射表），
+  以及含数组 / 嵌套 / 指针字段的结构体，当前一律不展开。
+- 约束：展开后参数个数不能超过 `LUAX_MAX_ARGS` / `JSAPI_MAX_ARGS`（都是 16）；
+  逐条点名开放，跑完第 7 节清单再批量放。
+
+**P2-B：136 条被闸门跳过的条目（数据质量一刀已完成）**
+已做：修 `inferOwns()` 两个系统性错判；42 条 `ownsIssue` 逐条核对实现裁决，
+4 条补合规 dtor、38 条留空并在 `note` 写明「借用 / 双参数 dtor / 无合规 dtor」；
+`coverage.md` 两张待办表新增 `note` 列。**该刀本身未开放任何 API（当时 446 条不变）**。
+剩余按原因分批处理：52 条返回句柄需 `name:` 点名确认、36 条缺合规 `owns`
+（要手写 thunk 或引入显式 `borrowed` 标记才能开放）、31 条 `void*` 缓冲、
+12 条 `char*` 返回（标注谁 free）、5 条未知返回类型。
 
 **P3：L3 229 条**
 按第 5 节成因分类手写 thunk：输出参数 98 条最有希望做成通用模式；
@@ -295,5 +332,5 @@ API 不会在自检里被真的调用。别把这个机制改成「真的调用�
 
 1. 读 `third_party/joy/api/README.md`（权威）+ 本文第 1 节。
 2. 跑一次第 7 节清单，确认基线是绿的（不要跳过，环境可能变）。
-3. 跟用户确认下一刀选 P2-A 还是 P2-B；**不要自行全量开放剩余 API**。
+3. 跟用户确认下一刀（P2-A / P2-B 剩余条目 / P4）；**不要自行全量开放剩余 API**。
 4. 每刀结束：重生成 → 验证 → 子仓提交推送 → 主仓提交推送（含 gitlink）→ 更新本文第 5 节数字。
